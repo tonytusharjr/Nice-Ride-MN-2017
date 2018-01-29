@@ -1,0 +1,100 @@
+---
+title: "Capstone Project Proposal: Nice Ride MN Bike Share Optimization Opportunities"
+author: "Tony Tushar Jr."
+date: "December 17, 2017"
+output: html_document
+---
+
+## What is the problem you want to solve?
+
+I plan to analyze Nice Ride MN bike share program data alongside historical weather data, in order to explore opportunities for optimizing the program operations and revenue.
+
+## Who is your client and why do they care about this problem? In other words, what will your client DO or DECIDE based on your analysis that they wouldn't have otherwise?
+
+The client is Nice Ride MN and this research is timely, as Nice Ride MN is in the process of accepting bids from for-profit bike share programs in order to phase out their non-profit operation. Considering the current circumstances of the program, it is beneficial to analyze bike share user behavior to determine if certain business decisions might increase operational efficiency or increase revenue potential.
+
+*Questions for the analysis:*
+
+How does weather - temperature, precipitation, humidity,  and wind speed - affect bike use?
+
+What are the busiest docking stations and how is this represented from a geospatial perspective?
+
+How does bike use vary between weekdays and weekends?
+
+How does use behavior differ between members and nonmembers? Behavioral use questions to include mean, median, mode, and range for ride length, day of week, time of day, location of departure, and location of arrival.
+
+What sociodemographic and economic factors are common among the most frequented docking stations?
+
+*Potential applications of the analysis:*
+
+Optimization model for maintaining bike stock at docking stations based on demand forecasting.
+
+Predictive model for volume of bike use based on a combination of weather variables.
+
+Exploration of shifting from flat rate pricing structure to dynamic pricing for revenue optimization.
+
+Predictive model for best future locations of bike docking stations.
+
+## What data are you going to use for this? How will you acquire this data?
+
+Nice Ride MN provides annual datasets for all bike rental activity and dock station characteristics. <https://niceridemn.egnyte.com/dl/QrR5Ih5Xeq>
+
+### Ride Activity Data Preview - Nice_Ride_trip_history_2017_season.csv
+|Variable|Description|
+|----|----|
+|Start date| Date and time the rental began
+|Start station| Descriptive name for the station where the rental began, changes if station is moved
+|Start terminal| Logical name for the station/terminal where the rental began, does not change when station is moved
+|End date| Date and time the rental ended
+|End station| Descriptive name for the station where the rental ended
+|End terminal| Logical name for the station/terminal where the rental ended
+|Total duration| Total length of the rental, in seconds
+|Account type| Values are Member or Casual, Members are users who have an account with Nice Ride, Casuals are walk up users who purchased pass at the station
+ 
+### Station Location Characteristics - Nice_Ride_2017_station_locations.csv
+|Variable|Description|
+|----|----|
+|Terminal| Logical name of station - matches Start terminal / End terminal in trip history
+|Station| Station name used on maps, xml feed and station poster frame - matches Start station / End station  in trip history
+|Latitude| Station location decimal latitude
+|Longitude| Station location decimal longitude
+|Nb Docks| Total number of bike docking points at station - indicates station size
+
+Local climatological data are available from the National Centers for Environmental
+Information's Integrated Surface Data (ISD) dataset. <https://www.ncdc.noaa.gov/cdo-web/datasets#LCD>
+
+### 2017 Local Climatological Data, Hourly by Day, by Month
+|Variable|Desecription
+|----|----|
+|Station| Station identification number
+|Station name| Name of station
+|Elevation| Station elevation
+|Latitude| Latitude of station
+|Longitude| Longitude of station
+|Date| Date and time of recorded observations
+|Report type| Reporting method characteristics
+|Hourly sky conditions| Hourly sky conditions
+|Hourly visibility| Level of visibility
+|Hourly dry bulb temp F| Hourly dry bulb measured temperature in Fahrenheit
+|Hourly wet bulb temp F| Hourly wet bulb measured temperature in Fahrenheit 
+|Hourly dew point temperature F| Hourly dewpoint in Fahrenheit
+|Hourly relative humidity| Hourly humidity level
+|Hourly wind speed| Hourly wind speed in miles per hour
+|Hourly wind gust speed| Hourly wind gust speed in miles per hour
+|Hourly precip| Hourly precipitation in inches
+
+*Daily and Monthly Variables are also available and will be considered secondarily to hourly measures, as hourly measures will correlate more closely with hourly rider use.*
+
+## In brief, outline your approach to solving this problem (knowing that this might change later).
+
+The first goal is to exhaustively determine the various relationships between bike use and weather variables. 
+
+1. Data wrangling will occur to clean datasets to applicable variables and check for inconsistencies in Nice Ride MN dataset as some stations may have switched mid-season.
+
+2. Exploratory Data Analysis (EDA) will occur to check for possible trends and/or correlations between bike useage characteristics and weather variables. The basic preliminary questions should be confidently answered after this stage.
+
+3. Machine Learning, Statistical Modeling, and/or Algorithmic applications will be considered in hope of developing one of the possible applications mentioned above. As of this proposal writing, the most realistic application would be to develop daily bike use predictions based on a specified set of weather variables. It would be very appealing to include this application idea as a dashboard of some kind in the project deliverables. 
+
+## What are your deliverables? Typically, this would include code, along with a paper and/or a slide deck.
+
+Deliverables are to be uploaded onto GitHub and will include R code, a statistical report, plus a slide deck summarizing and visualizing insights.

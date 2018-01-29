@@ -1,0 +1,345 @@
+---
+title: "Nice Ride Project Data Wrangling"
+author: "Tony Tushar Jr"
+date: "1/11/2018"
+output: html_document
+---
+
+
+
+#Load packages
+```{r}
+library(dplyr)
+library(tidyr)
+library(lubridate)
+```
+
+#Load and view trip history data
+```{r}
+library(readr)
+Nice_ride_trip_history_2017_season <- read_csv("Nice_ride_trip_history_2017_season.csv", 
+    col_types = cols(`End date` = col_datetime(format = "%m/%d/%Y %H:%M"), 
+        `Start date` = col_datetime(format = "%m/%d/%Y %H:%M")))
+Trips <- Nice_ride_trip_history_2017_season
+```
+
+#Round to nearest hour for start and end times
+```{r}
+Trips$`Start date` <- round_date(Trips$`Start date`, "hour")
+Trips$`End date` <- round_date(Trips$`End date`, "hour")
+```
+
+#Rename columns
+```{r}
+names(Trips)[names(Trips) == "Start date"] <- "Start_Date"
+names(Trips)[names(Trips) == "Start station"] <- "Start_Station"
+names(Trips)[names(Trips) == "Start station number"] <- "Start_Station_Number"
+names(Trips)[names(Trips) == "End date"] <- "End_Date"
+names(Trips)[names(Trips) == "End station"] <- "End_Station"
+names(Trips)[names(Trips) == "End station number"] <- "End_Station_Number"
+names(Trips)[names(Trips) == "Account type"] <- "Account_Type"
+names(Trips)[names(Trips) == "Total duration (Seconds)"] <- "Total_DurationSeconds"
+```
+
+#Load and view bike station data
+```{r}
+library(readr)
+Nice_Ride_2017_Station_Locations <- read_csv("Nice_Ride_2017_Station_Locations.csv")
+Stations <- Nice_Ride_2017_Station_Locations
+```
+
+#Column name adjust for consistency
+```{r}
+names(Stations)[names(Stations) == "Total docks"] <- "Total_Docks"
+```
+
+#Load and view weather data
+```{r}
+X2017MSPWeatherData <- read.csv("2017MSPWeatherData.csv")
+Weather <- as_data_frame(X2017MSPWeatherData)
+Weather
+```
+
+#Select relevant columns from weather data and rename
+```{r}
+Weather <- select(Weather, DATE, HOURLYPRSENTWEATHERTYPE, HOURLYDRYBULBTEMPF, HOURLYRelativeHumidity, HOURLYWindSpeed, HOURLYPrecip) 
+names(Weather)[names(Weather) == "DATE"] <- "Date_Hour"
+names(Weather)[names(Weather) == "HOURLYPRSENTWEATHERTYPE"] <- "Weather_Type"
+names(Weather)[names(Weather) == "HOURLYDRYBULBTEMPF"] <- "Temp_F"
+names(Weather)[names(Weather) == "HOURLYRelativeHumidity"] <- "Rel_Humidity"
+names(Weather)[names(Weather) == "HOURLYWindSpeed"] <- "Wind_Speed"
+names(Weather)[names(Weather) == "HOURLYPrecip"] <- "Precipitation"
+Weather
+```
+
+#Convert date column to dttm format, round to hours
+```{r}
+Weather$Date_Hour <- mdy_hm(Weather$Date_Hour)
+Weather$Date_Hour <- round_date(Weather$Date_Hour, "hour")
+```
+
+#Rewrite Weather_Type column with weather categorical descriptions
+```{r}
+levels(Weather$Weather_Type)
+levels(Weather$Weather_Type)[c(2:4,15)] <- "Light Drizzle"
+```
+
+```{r}
+levels(Weather$Weather_Type)
+levels(Weather$Weather_Type)[c(3,4,7,8,10,38,39,56,57,61)] <- "Light Rain"
+```
+
+```{r}
+levels(Weather$Weather_Type)
+levels(Weather$Weather_Type)[c(11,12,16,17,41,43,45,51,52,53,54)] <- "Moderate Rain"
+```
+
+```{r}
+levels(Weather$Weather_Type)
+levels(Weather$Weather_Type)[c(20,21,24)] <- "Heavy Rain"
+```
+
+```{r}
+levels(Weather$Weather_Type)
+levels(Weather$Weather_Type)[c(4,5,6)] <- "Light T-storm"
+```
+
+```{r}
+levels(Weather$Weather_Type)
+levels(Weather$Weather_Type)[c(10,11,13,14,15,16,17,30,33,34,35)] <- "Moderate T-storm"
+```
+
+```{r}
+levels(Weather$Weather_Type)
+levels(Weather$Weather_Type)[c(13,14,15,16,17,29)] <- "Heavy T-storm"
+```
+
+```{r}
+levels(Weather$Weather_Type)
+levels(Weather$Weather_Type)[c(5,6)] <- "Light Snow"
+```
+
+```{r}
+levels(Weather$Weather_Type)
+levels(Weather$Weather_Type)[c(21,22)] <- "Moderate Snow"
+```
+
+```{r}
+levels(Weather$Weather_Type)
+levels(Weather$Weather_Type)[c(6,10,14,15,16,19)] <- "Light Fog/Haze"
+```
+
+```{r}
+levels(Weather$Weather_Type)
+levels(Weather$Weather_Type)[c(7,12,13,14,15)] <- "Moderate Fog/Haze"
+```
+
+```{r}
+levels(Weather$Weather_Type)
+levels(Weather$Weather_Type)[c(1,13,14)] <- ""
+levels(Weather$Weather_Type)
+```
+
+#Handle missing values for columns
+```{r}
+Weather$Weather_Type <- sub("^$", "Clear", Weather$Weather_Type)
+levels(Weather$Precipitation)
+levels(Weather$Precipitation)[c(1,66)] <- 0
+Weather <- na.omit(Weather)
+```
+
+#Relabel suspect precipitation observations
+```{r}
+levels(Weather$Precipitation)
+levels(Weather$Precipitation)[c(4)] <- "0.02"
+levels(Weather$Precipitation)
+levels(Weather$Precipitation)[c(5)] <- "0.03"
+levels(Weather$Precipitation)
+levels(Weather$Precipitation)[c(6)] <- "0.04"
+levels(Weather$Precipitation)
+levels(Weather$Precipitation)[c(7)] <- "0.05"
+levels(Weather$Precipitation)
+levels(Weather$Precipitation)[c(13)] <- "0.11"
+levels(Weather$Precipitation)
+levels(Weather$Precipitation)[c(16)] <- "0.14"
+levels(Weather$Precipitation)
+levels(Weather$Precipitation)[c(22)] <- "0.20"
+levels(Weather$Precipitation)
+levels(Weather$Precipitation)[c(38)] <- "0.38"
+levels(Weather$Precipitation)
+levels(Weather$Precipitation)[c(39)] <- "0.39"
+levels(Weather$Precipitation)
+```
+
+#Join Trips and Stations based on Station$Number
+```{r}
+Ride <- full_join(Trips, Stations, by = c("Start_Station_Number" = "Number"))
+Ride <- select(Ride, -Name)
+Ride <- select(Ride, Start_Date:Total_Docks)
+names(Ride)[names(Ride) == "Latitude"] <- "Start_Latitude"
+names(Ride)[names(Ride) == "Longitude"] <- "Start_Longitude"
+names(Ride)[names(Ride) == "Total_Docks"] <- "Total_Start_Docks"
+```
+
+```{r}
+Ride <- select(Ride, Start_Date:Start_Station_Number, Start_Latitude:Total_Start_Docks, everything())
+```
+
+```{r}
+Rides <- full_join(Ride, Stations, by = c("End_Station_Number" = "Number"))
+Rides <- select(Rides, -Name)
+Rides <- select(Rides, Start_Date:Total_Docks)
+names(Rides)[names(Rides) == "Latitude"] <- "End_Latitude"
+names(Rides)[names(Rides) == "Longitude"] <- "End_Longitude"
+names(Rides)[names(Rides) == "Total_Docks"] <- "Total_End_Docks"
+```
+
+```{r}
+Rides <- select(Rides, Start_Date:End_Station_Number, End_Latitude:Total_End_Docks, everything())
+```
+
+#Cleanup Weather data frame reducing variables to single observation per hour
+#A Mode function for characters:
+```{r}
+Mode <- function(x, na.rm = FALSE) {
+  if(na.rm){
+    x = x[!is.na(x)]
+  }
+
+  ux <- unique(x)
+  return(ux[which.max(tabulate(match(x, ux)))])
+}
+```
+
+#Apply Mode function to Weather_Type column observations per hour
+```{r}
+Weather_Type_Mode <- Weather %>% select(Date_Hour, Weather_Type)
+Weather_Type_Mode <- Weather_Type_Mode %>% group_by(Date_Hour) %>% summarise(Mode(Weather_Type))
+```
+
+#Take mean observation of Temp_F, Rel_Humidity, and Wind_Speed columns per hour
+```{r}
+Weather_Mean <- Weather %>% select(Date_Hour,Temp_F, Rel_Humidity, Wind_Speed)
+Weather_Mean <- Weather_Mean %>% group_by(Date_Hour) %>% summarise_all(funs(mean))
+```
+
+#Convert Precipitation to numeric and take max observation per hour
+```{r}
+Precipitation_Max <- Weather %>% select(Date_Hour, Precipitation)
+Precipitation_Max$Precipitation <- as.character(as.factor(Precipitation_Max$Precipitation))
+Precipitation_Max$Precipitation <- as.numeric((as.character(Precipitation_Max$Precipitation)))
+Precipitation_Max <- Precipitation_Max %>% group_by(Date_Hour) %>% summarise(max(Precipitation))
+```
+
+#Join weather variables back together
+```{r}
+Weather_Type_Mode_Mean <- full_join(Weather_Type_Mode, Weather_Mean, by = c("Date_Hour" = "Date_Hour"))
+Weather_Type <- full_join(Weather_Type_Mode_Mean, Precipitation_Max, by = c("Date_Hour" = "Date_Hour"))
+```
+
+#Join Trips/Stations with Weather based on Date 
+```{r}
+Nice_Ride <- full_join(Rides, Weather_Type, by = c("Start_Date" = "Date_Hour"))
+```
+
+#Troubleshoot NA's for dock, geocoordinate, and duration observations
+```{r}
+Nice_Ride <- na.omit(Nice_Ride)
+```
+
+#Add weekday/weekend variable for start dates
+```{r}
+library(timeDate)
+Nice_Ride <- Nice_Ride %>% mutate(StartWeek_Day_End = ifelse(isWeekday(Start_Date, wday = 1:5), "Weekday", "Weekend"))
+```
+
+#Separate start/end dates and times, add start day of week variable
+```{r}
+Nice_Ride <- Nice_Ride %>% mutate(Start_Year = year(Start_Date))
+Nice_Ride <- Nice_Ride %>% mutate(Start_Month = month(Start_Date))
+Nice_Ride <- Nice_Ride %>% mutate(Start_Day = day(Start_Date))
+Nice_Ride <- Nice_Ride %>% mutate(Start_Hour = hour(Start_Date))
+Nice_Ride <- Nice_Ride %>% mutate(End_Year = year(End_Date))
+Nice_Ride <- Nice_Ride %>% mutate(End_Month = month(End_Date))
+Nice_Ride <- Nice_Ride %>% mutate(End_Day = day(End_Date))
+Nice_Ride <- Nice_Ride %>% mutate(End_Hour = hour(End_Date))
+Nice_Ride <- Nice_Ride %>% mutate(Start_DoWeek = wday(Start_Date, label = TRUE))
+```
+
+#Rearrange variables in desired order and sort by start date and time
+```{r}
+Nice_Ride <- Nice_Ride %>% select(20, 29, 22:24, 2:6, 26:28, 8:19, -21, -25, -1, -7)  
+```
+
+#Load weathermetrics package to calculate heat index variable
+```{r}
+library(weathermetrics)
+Nice_Ride <- Nice_Ride %>% mutate(Heat_Index = heat.index(t = Temp_F, rh = Rel_Humidity, temperature.metric = "farenheit"))
+```
+
+#Arrange table based on start month, date, and hour
+```{r}
+Nice_Ride <- Nice_Ride %>% arrange(Start_Month, Start_Day, Start_Hour)
+```
+
+#Calculate trip length in minutes
+```{r}
+Nice_Ride <- Nice_Ride %>% mutate(Total_DurationMin = Total_DurationSeconds/60)
+```
+
+#Calculate trip distance in kilometers, converted to miles
+```{r}
+earth.dist <- function (long1, lat1, long2, lat2)
+{
+rad <- pi/180
+a1 <- lat1 * rad
+a2 <- long1 * rad
+b1 <- lat2 * rad
+b2 <- long2 * rad
+dlon <- b2 - a2
+dlat <- b1 - a1
+a <- (sin(dlat/2))^2 + cos(a1) * cos(b1) * (sin(dlon/2))^2
+c <- 2 * atan2(sqrt(a), sqrt(1 - a))
+R <- 6378.145
+d <- R * c
+return(d)
+}
+
+Nice_Ride <- Nice_Ride %>%  mutate(Trip_DistanceKM = earth.dist(Start_Longitude, Start_Latitude, End_Longitude, End_Latitude))
+
+Nice_Ride <- Nice_Ride %>% mutate(Trip_DistanceMiles = Trip_DistanceKM/0.621371)
+```
+
+#One last rearrange of variables
+```{r}
+Nice_Ride_Updated <- Nice_Ride %>% select(1:20, 27:29, 21:26)
+```
+
+#Replace two off values in Account_Type variable
+```{r}
+Nice_Ride_Updated$Account_Type <- gsub("Inconnu", "Casual", Nice_Ride_Updated$Account_Type)
+```
+
+#Rename variables
+```{r}
+names(Nice_Ride_Updated)[names(Nice_Ride_Updated) == "Mode(Weather_Type)"] <- "Weather_Type"
+names(Nice_Ride_Updated)[names(Nice_Ride_Updated) == "max(Precipitation)"] <- "Precipitation"
+```
+
+#Remove objects
+```{r}
+rm(list=setdiff(ls(), "Nice_Ride_Updated"))
+```
+
+#Save tidy data
+```{r}
+setwd("~/Nice Ride MN 2017/Nice-Ride-MN-2017")
+write_csv(Nice_Ride_Updated, "Nice_Ride_Updated.csv")
+save.image("RidesWorkSpace.RData")
+```
+
+
+
+
+
+
