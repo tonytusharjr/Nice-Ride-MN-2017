@@ -15,6 +15,8 @@ library(lubridate)
 library(readr)
 library(weathermetrics)
 library(timeDate)
+library(ggplot2)
+library(ruler)
 ```
 
 #*Load and view 2016 trip history data*
@@ -204,7 +206,7 @@ head(Nice_Ride_1617)
 
 #Add weekday/weekend variable for start dates
 ```{r}
-Nice_Ride_1617 <- Nice_Ride_1617 %>% mutate(Weekend = ifelse(isWeekend(Start_Date, wday = 1:5), "0", "1"))
+Nice_Ride_1617 <- Nice_Ride_1617 %>% mutate(Weekend = ifelse(isWeekend(Start_Date, wday = 1:5), "1", "0"))
 ```
 
 #Rearrange variables in dataset
@@ -220,7 +222,7 @@ Nice_Ride_1617 <- Nice_Ride_1617 %>% arrange(Start_Year, Start_Month, Start_Day)
 
 #Calculate trip length in minutes
 ```{r}
-Nice_Ride <- Nice_Ride %>% mutate(Total_DurationMin = Total_DurationSeconds/60)
+Nice_Ride_1617 <- Nice_Ride_1617 %>% mutate(Total_DurationMin = Total_Duration_Seconds/60)
 ```
 
 #Calculate trip distance in kilometers, converted to miles
@@ -241,31 +243,27 @@ d <- R * c
 return(d)
 }
 
-Nice_Ride <- Nice_Ride %>%  mutate(Trip_DistanceKM = earth.dist(Start_Longitude, Start_Latitude, End_Longitude, End_Latitude))
+Nice_Ride_1617 <- Nice_Ride_1617 %>%  mutate(Trip_DistanceKM = earth.dist(Start_Longitude, Start_Latitude, End_Longitude, End_Latitude))
 
-Nice_Ride <- Nice_Ride %>% mutate(Trip_DistanceMiles = Trip_DistanceKM/0.621371)
+Nice_Ride_1617 <- Nice_Ride_1617 %>% mutate(Trip_DistanceMiles = Trip_DistanceKM/0.621371)
 ```
 
 #One last rearrange of variables
 ```{r}
-Nice_Ride <- Nice_Ride %>% select(1:18, 24, 26, 19:23, -25)
+Nice_Ride_1617 <- Nice_Ride_1617 %>% select(1:17, 29, 31, 18:28, -30)
 ```
 
 #Replace two off values in Account_Type variable
 ```{r}
-Nice_Ride$Account_Type <- gsub("Inconnu", "Casual", Nice_Ride$Account_Type)
-```
-
-#Rename variables
-```{r}
-names(Nice_Ride)[names(Nice_Ride) == "Mode(Weather_Type)"] <- "Weather_Type"
-names(Nice_Ride)[names(Nice_Ride) == "max(Precipitation)"] <- "Precipitation"
+table(Nice_Ride_1617$Account_Type)
+Nice_Ride_1617$Account_Type <- gsub("Inconnu", "Casual", Nice_Ride_1617$Account_Type)
+table(Nice_Ride_1617$Account_Type)
 ```
 
 #Save tidy data
 ```{r}
 setwd("~/Nice Ride MN 2017/Nice-Ride-MN-2017")
-write_csv(Nice_Ride, "Nice_Ride1312018.csv")
+write_csv(Nice_Ride_1617, "Nice_Ride_1617.csv")
 ```
 
 
