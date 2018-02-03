@@ -25,6 +25,7 @@ Nice_ride_trip_history_2016_season <- read_csv("Nice_ride_trip_history_2016_seas
     col_types = cols(`End date` = col_datetime(format = "%m/%d/%Y %H:%M"), 
         `Start date` = col_datetime(format = "%m/%d/%Y %H:%M")))
 head(Nice_ride_trip_history_2016_season)
+summary(Nice_ride_trip_history_2016_season)
 ```
 
 #Several NA values at end of dataset, omit
@@ -51,20 +52,17 @@ Trips_2016 <- Nice_ride_trip_history_2016_season
 ```{r}
 Nice_Ride_2016_Station_Locations <- read_csv("Nice_Ride_2016_Station_Locations.csv")
 head(Nice_Ride_2016_Station_Locations)
+summary(Nice_Ride_2016_Station_Locations)
+Stations_2016 <- Nice_Ride_2016_Station_Locations 
+names(Stations_2016)[names(Stations_2016) == 'Nb Docks'] <- 'Total_Docks'
 ```
 
-#Column name adjust for consistency and drop X6 variable
-```{r}
-Nice_Ride_2016_Station_Locations <- Nice_Ride_2016_Station_Locations %>% select(-X6) %>%  rename(Total_Docks='Nb Docks')
-Stations_2016 <- Nice_Ride_2016_Station_Locations
-```
-----
 #*Load and view 2017 trip history data*
 ```{r}
 Nice_ride_trip_history_2017_season <- read_csv("Nice_ride_trip_history_2017_season.csv", 
     col_types = cols(`End date` = col_datetime(format = "%m/%d/%Y %H:%M"), 
         `Start date` = col_datetime(format = "%m/%d/%Y %H:%M")))
-View(Nice_ride_trip_history_2017_season)
+head(Nice_ride_trip_history_2017_season)
 ```
 
 #Round to nearest hour for start and end times
@@ -83,12 +81,8 @@ Trips_2017 <- Nice_ride_trip_history_2017_season
 ```{r}
 Nice_Ride_2017_Station_Locations <- read_csv("Nice_Ride_2017_Station_Locations.csv")
 head(Nice_Ride_2017_Station_Locations)
-```
-
-#Column name adjust 
-```{r}
-Nice_Ride_2017_Station_Locations <- Nice_Ride_2017_Station_Locations %>% rename(Total_Docks=`Total docks`)
 Stations_2017 <- Nice_Ride_2017_Station_Locations
+names(Stations_2017)[names(Stations_2017) == 'Total docks'] <- 'Total_Docks'
 ```
 
 #Join Trips_2016 and Stations_2016 based on Station Number
@@ -97,7 +91,7 @@ Stations_2017 <- Nice_Ride_2017_Station_Locations
 Rides_2016 <- full_join(Trips_2016, Stations_2016, by = c("Start_Station_Number" = "Terminal"))
 Rides_2016 <- Rides_2016 %>% select(-Station)
 Rides_2016 <- Rides_2016 %>% select(Start_Date:Start_Station, -Start_Station_Number, Latitude:Total_Docks, End_Date:Account_Type)
-Rides_2016 <- Rides_2016 %>% rename(Start_Latitude = Latitude) %>% rename(Start_Longitude=Longitude) %>% rename(Start_Docks=Total_Docks)
+Rides_2016 <- Rides_2016 %>% rename(Start_Latitude = Latitude, Start_Longitude=Longitude) %>% rename(Start_Docks=Total_Docks)
 #End Stations
 Rides_2016 <- full_join(Rides_2016, Stations_2016, by = c("End_Station_Number" = "Terminal"))
 Rides_2016 <- Rides_2016 %>% select(-Station, -End_Station_Number) 
@@ -155,7 +149,7 @@ dim(X16MSPWeatherDaily)
 #Select relevant variables
 ```{r}
 Weather_2016 <- X16MSPWeatherDaily %>% select(DATE, AWND, PRCP, SNOW, SNWD, TAVG, WT01:WT03, WT05, WT08)
-View(Weather_2016)
+head(Weather_2016)
 ```
 
 #Rename variables
@@ -178,7 +172,7 @@ dim(X17MSPWeatherDaily)
 #Select relevant variables
 ```{r}
 Weather_2017 <- X17MSPWeatherDaily %>% select(DATE, AWND, PRCP, SNOW, SNWD, TAVG, WT01:WT03, WT05, WT08)
-View(Weather_2017)
+head(Weather_2017)
 ```
 
 #Rename variables
@@ -194,7 +188,7 @@ Weather_2017 <- Weather_2017 %>% replace_na(list(Fog = 0, Heavy_Fog = 0, Thunder
 #Bind 2016 and 2017 daily weather
 ```{r}
 Weather_1617 <- rbind(Weather_2016, Weather_2017)
-View(Weather_1617)
+head(Weather_1617)
 dim(Weather_1617)
 ```
 
