@@ -196,6 +196,7 @@ dim(Weather_1617)
 ```{r}
 Nice_Ride_1617 <- full_join(Rides_1617, Weather_1617, by = c("Start_Join" = "Date"))
 head(Nice_Ride_1617)
+rm(list=setdiff(ls(), "Nice_Ride_1617"))
 ```
 
 #Add weekday/weekend variable for start dates
@@ -257,6 +258,7 @@ table(Nice_Ride_1617$Account_Type)
 #Save tidy data
 ```{r}
 setwd("~/Nice Ride MN 2017/Nice-Ride-MN-2017")
+View(Nice_Ride_1617)
 write_csv(Nice_Ride_1617, "Nice_Ride_1617.csv")
 ```
 
