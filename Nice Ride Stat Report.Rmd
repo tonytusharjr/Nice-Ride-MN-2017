@@ -23,9 +23,9 @@ In this EDA we will perform the following steps:
 1. General exploration of dataset:
 - What is the distribution of trips per month, by year?
 - What is the distribution of trips per day of the week, by account type?
-- What is the distribution of trips by weekday and weekend, by account type?
-- What is the overall duration of bike trips, by account type?
-- What is the overall distance of bike trips, by account type?
+- What is the distibution of trips by weekday and weekend for the season, by year, by account type?
+- Summary of trip distance in miles
+- Summary of trip duration in minutes
 - Are there outliers to address? If so, how are they to be addressed?
 
 2. Sign and rank testing for the affects of primary weather variables on bikeshare volume:
@@ -43,12 +43,7 @@ In this EDA we will perform the following steps:
 library(tidyverse)
 library(readr)
 library(ggthemes)
-```
-
-#Load plot specs
-```{r}
-cbbPalette <- c("#000000", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
-
+library(lubridate)
 ```
 
 #Load dataset
@@ -63,22 +58,143 @@ View(Rides1617)
 ```{r}
 #Create data subset
 Trips_Month <- Rides1617 %>% count(Start_Year, Start_Month) %>% mutate(Percent_Year = prop.table(n))
-as.data.frame(Trips_Month)
+head(Trips_Month, n=12)
 
 #Setup plot properties for possible reuse
-gg_prop <- ggplot(data = data.frame(), aes(x = Start_Month, y = Percent_Year, fill = factor(Start_Year))) + 
-  geom_bar(stat = 'identity', position = 'dodge', alpha = 2/3) + labs(x = "Start Month", y = "Percentage", title="Trip Distribution by Month, 2016-2017")
+gg_prop_Month <- ggplot(data = data.frame(), aes(x = Start_Month, y = Percent_Year, fill = factor(Start_Year))) + 
+  geom_bar(stat = 'identity', position = 'dodge', alpha = 2/3) + labs(x = "Start Month", y = "Percentage", title="Trip Distribution by Month, 2016-2017", subtitle="Heavy road construction in 2016, possible cause of trip volume differences for July and September")
 
 #Plot data
-gg_prop %+% Trips_Month 
+gg_prop_Month %+% Trips_Month 
 ```
-Trip distrubution is fairly even for months between seasons, however, July and September show variation. Research shows that 2016 was a particularly dense season of road construction, as Minneapolis installed biking lanes throughout the metro. This factor is likely a contributor to the variance between 2016 and 2017, however, we cannot control for construction data and detail other than to note here.
+Trip distrubution is fairly even for a year-over-year comparison, however, July and September show larger variation. Research shows that 2016 was a particularly dense season of road construction, as Minneapolis installed biking lanes throughout the metro. This factor is likely a contributor to the variance between 2016 and 2017, however, we cannot control for construction data other than to note here.
 
-- What is the distribution of trips per day of the week, by account type?
-- What is the distribution of trips by weekday and weekend, by account type?
-- What is the overall duration of bike trips, by account type?
-- What is the overall distance of bike trips, by account type?
-- Are there outliers to address? If so, how are they to be addressed?
+##- What is the distribution of trips per day of the week, by account type?
+```{r}
+#Reorder days of the week
+Rides1617$Start_DoWeek <- ordered(Rides1617$Start_DoWeek, levels=c("Sun", "Mon", "Tue", "Wed", "Thu", 
+"Fri", "Sat"))
+
+#Create data subset
+Trips_Week <- Rides1617 %>% count(Start_Year, Start_DoWeek, Account_Type) %>% mutate(Percent_Year = prop.table(n))
+head(Trips_Week, n=12)
+
+#Setup plot properties for possible reuse
+gg_prop_Week <- ggplot(data = data.frame(), aes(x = Start_DoWeek, y = Percent_Year, fill = factor(Account_Type))) + 
+  geom_bar(stat = 'identity', position = 'dodge', alpha = 2/3) + facet_grid(Start_Year ~ .) + labs(x = "Day of the Week", y = "Percentage", title="Trip Distribution by Day and Account Type, 2016-2017", subtitle="Distribution for casual and member account types are inverse of each other", fill="Account Type")
+
+#Plot data
+gg_prop_Week %+% Trips_Week 
+```
+Daily distribution by year confirms consistency year-over-year, member riders are utilizing bikshare for commuting purposes while casual riders utilize bikeshare for leisure.
+
+##- What is the distibution of trips per year by account type?
+```{r}
+#Create data subset
+Trips_Account <- Rides1617 %>% count(Start_Year, Start_Month, Start_Day, Weekend, Account_Type) 
+Trips_Account16 <- Trips_Account %>% mutate(Dates = as.Date(paste(Start_Year, Start_Month, Start_Day, sep='-'))) %>% filter(Start_Year==2016) 
+Trips_Account17 <- Trips_Account %>% mutate(Dates = as.Date(paste(Start_Year, Start_Month, Start_Day, sep='-'))) %>% filter(Start_Year==2017) 
+
+#Setup plot properties for possible reuse
+gg_prop_Account <- ggplot(data = data.frame(), aes(x = Dates, y = n, color=factor(Account_Type))) + 
+  geom_point(size=3, alpha = 2/3) + geom_jitter() + labs(x = "Date", y = "Total Rides", title="Trip Distribution by Weekday and Weekend", subtitle="", color="Account Type")
+
+#Plot data
+gg_prop_Account %+% Trips_Account16 
+gg_prop_Account %+% Trips_Account17 
+multiplot(gg_prop_DayEnd %+% Trips_DayEnd16, gg_prop_DayEnd %+% Trips_DayEnd17)
+```
+
+##- Summary of trip distance
+```{r}
+summary(Rides1617$Trip_DistanceMiles)
+```
+Median trip distance is 1.944 miles while the max is 29 miles, is this logical in comparison to trip duration?
+
+##- Summary of trip duration in minutes
+```{r}
+summary(Rides1617$Total_DurationMin)  
+```
+It is odd to see a max ride observation of over 280,000 minutes, this equates to 194 days! How many bike rides are greater than one day?
+
+##- Are there outliers to address? If so, how are they to be addressed?
+```{r}
+# What percentage of bike rides are over one day in length?
+# Trips equal to or less than one day
+Rides_Day <- Rides1617 %>% mutate(Total_DurationDay = (Total_DurationMin <= 24*60))
+
+Day_Length <- nrow(Rides_Day)
+
+sum(Rides_Day$Total_DurationDay/Day_Length)
+```
+There are 1,498 observations in which ride duration is greater than one day, this accounts for less than 0.02% of our dataset. As our intended outcome of this study is to create a predictive model for daily trips as related to daily weather, we will consider these observations as outliers and remove them.
+
+#Remove outliers from dataset
+```{r}
+Rides1617_Mod <- Rides1617 %>% filter(Total_DurationMin<=24*60)
+```
+
+#Visualize with outliers and without outliers via boxplots
+```{r}
+#Setup plot properties for possible reuse
+gg_prop_boxplot <- ggplot(data = data.frame(), aes(Start_Month, Total_DurationMin, color=factor(Start_Year))) + geom_boxplot(outlier.shape = NA) + labs(x = "", y = "", title="", subtitle="", color="") + guides(fill=FALSE) + scale_x_continuous(limits = c(6.80, 24.50))
+
+#Plot data
+gg_prop_boxplot %+% Rides1617 
+gg_prop_boxplot %+% Rides1617_Mod 
+multiplot(gg_prop_DayEnd %+% Trips_DayEnd16, gg_prop_DayEnd %+% Trips_DayEnd17)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
