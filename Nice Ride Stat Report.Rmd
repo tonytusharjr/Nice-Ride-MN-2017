@@ -1,0 +1,241 @@
+---
+title: "Nice Ride Stat Report"
+author: "Tony Tushar Jr"
+date: "February 2, 2018"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+This Exploratory Data Analysis (EDA) serves as a starting point for understanding our dataset prior regression and machine learning applications. A reminder of our two main questions and ultimate purpose of this project:
+
+Two Main Questions:
+- What is the affect of weather on bikeshare volume?
+- How does the affect of weather on bikeshare volume differ between member and casual account types?
+
+Ultimate Purpose:
+- To provide a predictive model for weekly bikeshare volume based on the input of weather forecast variables.
+
+In this EDA we will perform the following steps:
+
+1. General exploration of dataset:
+- What is the distribution of trips per month, by year?
+- What is the distribution of trips per day of the week, by account type?
+- What is the distribution of trips by weekday and weekend, by account type?
+- What is the overall duration of bike trips, by account type?
+- What is the overall distance of bike trips, by account type?
+- Are there outliers to address? If so, how are they to be addressed?
+
+2. Sign and rank testing for the affects of primary weather variables on bikeshare volume:
+- Affect of average temperature
+- Affect of average wind speed
+- Affect of precipitation
+- Affect of snow accumulation
+
+3. ...?
+
+4. Conclusions, next steps:
+
+#Load packages
+```{r}
+library(tidyverse)
+library(readr)
+library(ggthemes)
+```
+
+#Load plot specs
+```{r}
+cbbPalette <- c("#000000", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+
+```
+
+#Load dataset
+```{r}
+Rides1617 <- read_csv("Nice_Ride_1617.csv")
+View(Rides1617)
+```
+
+#1. General exploration of dataset:
+
+##- What is the distribution of trips per month, for 2016-2017 seasons?
+```{r}
+#Create data subset
+Trips_Month <- Rides1617 %>% count(Start_Year, Start_Month) %>% mutate(Percent_Year = prop.table(n))
+as.data.frame(Trips_Month)
+
+#Setup plot properties for possible reuse
+gg_prop <- ggplot(data = data.frame(), aes(x = Start_Month, y = Percent_Year, fill = factor(Start_Year))) + 
+  geom_bar(stat = 'identity', position = 'dodge', alpha = 2/3) + labs(x = "Start Month", y = "Percentage", title="Trip Distribution by Month, 2016-2017")
+
+#Plot data
+gg_prop %+% Trips_Month 
+```
+Trip distrubution is fairly even for months between seasons, however, July and September show variation. Research shows that 2016 was a particularly dense season of road construction, as Minneapolis installed biking lanes throughout the metro. This factor is likely a contributor to the variance between 2016 and 2017, however, we cannot control for construction data and detail other than to note here.
+
+- What is the distribution of trips per day of the week, by account type?
+- What is the distribution of trips by weekday and weekend, by account type?
+- What is the overall duration of bike trips, by account type?
+- What is the overall distance of bike trips, by account type?
+- Are there outliers to address? If so, how are they to be addressed?
+
+
+
+
+----
+#Multiplot function
+```{r}
+# Multiple plot function
+#
+# ggplot objects can be passed in ..., or to plotlist (as a list of ggplot objects)
+# - cols:   Number of columns in layout
+# - layout: A matrix specifying the layout. If present, 'cols' is ignored.
+#
+# If the layout is something like matrix(c(1,2,3,3), nrow=2, byrow=TRUE),
+# then plot 1 will go in the upper left, 2 will go in the upper right, and
+# 3 will go all the way across the bottom.
+#
+multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
+  library(grid)
+
+  # Make a list from the ... arguments and plotlist
+  plots <- c(list(...), plotlist)
+
+  numPlots = length(plots)
+
+  # If layout is NULL, then use 'cols' to determine layout
+  if (is.null(layout)) {
+    # Make the panel
+    # ncol: Number of columns of plots
+    # nrow: Number of rows needed, calculated from # of cols
+    layout <- matrix(seq(1, cols * ceiling(numPlots/cols)),
+                    ncol = cols, nrow = ceiling(numPlots/cols))
+  }
+
+ if (numPlots==1) {
+    print(plots[[1]])
+
+  } else {
+    # Set up the page
+    grid.newpage()
+    pushViewport(viewport(layout = grid.layout(nrow(layout), ncol(layout))))
+
+    # Make each plot, in the correct location
+    for (i in 1:numPlots) {
+      # Get the i,j matrix positions of the regions that contain this subplot
+      matchidx <- as.data.frame(which(layout == i, arr.ind = TRUE))
+
+      print(plots[[i]], vp = viewport(layout.pos.row = matchidx$row,
+                                      layout.pos.col = matchidx$col))
+    }
+  }
+}
+```
+
+----
+#Address Outliers
+Being that this analysis is parametric in scope - how a given day's weather affects a given day's bike riding activity - there's a need to define and address univariate outliers for the trip duration variable. 
+
+#Exploring trip duration and possible outliers
+```{r}
+#Add total duration in days variable for perspective
+Rides1617 <- Rides1617 %>% mutate(Total_DurationDays = Total_DurationMin/60/24)
+Days_Grt_1 <- Rides1617 %>% select(Start_Year:Start_Day, End_Year:End_Day, Total_DurationDays) %>% filter(Total_DurationDays>1) %>% arrange(desc(Total_DurationDays))
+head(Days_Grt_1)
+tail(Days_Grt_1)
+```
+Having explored the head and tail of 1498 observations with trip durations greater than one day, let's explore these potential outliers from a visual statistical framework.
+
+#Outlier function for detecting, visualizing and removing outliers
+```{r}
+outlierKD <- function(dt, var) {
+  var_name <- eval(substitute(var),eval(dt))
+  tot <- sum(!is.na(var_name))
+  na1 <- sum(is.na(var_name))
+  m1 <- mean(var_name, na.rm = T)
+  par(mfrow=c(2, 2), oma=c(0,0,3,0))
+  boxplot(var_name, main="With outliers")
+  hist(var_name, main="With outliers", xlab=NA, ylab=NA)
+  outlier <- boxplot.stats(var_name)$out
+  mo <- mean(outlier)
+  var_name <- ifelse(var_name %in% outlier, NA, var_name)
+  boxplot(var_name, main="Without outliers")
+  hist(var_name, main="Without outliers", xlab=NA, ylab=NA)
+  title("Outlier Check", outer=TRUE)
+  na2 <- sum(is.na(var_name))
+  message("Outliers identified: ", na2 - na1, " from ", tot, " observations")
+  message("Proportion (%) of outliers: ", (na2 - na1) / tot*100)
+  message("Mean of the outliers: ", mo)
+  m2 <- mean(var_name, na.rm = T)
+  message("Mean without removing outliers: ", m1)
+  message("Mean if we remove outliers: ", m2)
+  response <- readline(prompt="Do you want to remove outliers and to replace with NA? [yes/no]: ")
+  if(response == "y" | response == "yes"){
+    dt[as.character(substitute(var))] <- invisible(var_name)
+    assign(as.character(as.list(match.call())$dt), dt, envir = .GlobalEnv)
+    message("Outliers successfully removed", "\n")
+    return(invisible(dt))
+  } else{
+    message("Nothing changed", "\n")
+    return(invisible(var_name))
+  }
+}
+```
+
+#Test duration days variable for outliers
+```{r}
+Rides1617_modout <- Rides1617
+outlierKD(Rides1617_modout, Total_DurationDays)
+#View results
+Days_Grt1_Mod <- Rides1617_modout %>% select(Start_Year:Start_Day, End_Year:End_Day, Total_DurationMin, Total_DurationDays) %>% arrange(desc(Total_DurationMin, Total_DurationDays))
+head(Days_Grt1_Mod)
+tail(Days_Grt1_Mod)
+```
+
+```{r}
+par(mfrow=c(1, 2))
+plot(Rides1617_modout$Total_DurationMin, Rides1617_modout$Trip_DistanceMiles, xlim=c(0, 240), ylim=c(0, 50), main="With Outliers", xlab="Minutes", ylab="Miles", pch="*", col="red", cex=2)
+abline(lm(Total_DurationMin ~ Trip_DistanceMiles, data=Rides1617_modout), col="blue", lwd=3, lty=2)
+```
+
+
+
+
+#Visualize observational distribution of Total_DurationDays 
+```{r}
+#Focus on one year, 2016
+Rides_Month2016 <- Rides1617 %>% group_by(Start_Year, Start_Month, Start_Day) %>% select(Start_Year:Start_Day, Total_DurationDays, Trip_DistanceMiles)
+Rides_Month2016 %>% ggplot(aes(Start_Month, Total_DurationDays, group = Start_Month)) + geom_boxplot(outlier.colour = "red", outlier.shape = 1) + coord_cartesian(ylim = c(0,1.75)) + scale_x_continuous(breaks = c(4:11))
+```
+Boxplots show several points beyond the 3 quartile range. Due to the inability to have negative minutes for total trip duration, this distribution is right tailed, this is of note for testing and further measurement of outliers for trip duration in minutes variable.
+
+#Visualize observational distribution of Trip_DistanceMiles 
+```{r}
+Rides_Month2016 %>% ggplot(aes(Start_Month, Trip_DistanceMiles, group = Start_Month)) + geom_boxplot() + coord_cartesian(ylim = c(0,50)) + scale_x_continuous(breaks = c(4:11))
+```
+Trip distance in miles reveals the possibility that a longer trip duration does not necessarily relate to a longer distance traveled. Knowing our max trip duration observation of over 280,000 minutes did not negate a cross country trek! Something is odd for the 1498 observations that are greater than two days.
+
+```{r}
+Rides_Month2016 %>% ggplot(aes(Total_DurationDays, Trip_DistanceMiles, color=Start_Month)) + geom_point() + stat_smooth(method="lm") + coord_cartesian(xlim=c(0,2))
+```
+
+#Determine potential outlier observations based on z-score, MAD, and IQR tests
+```{r}
+#Select duration and distance variables
+Rides_Dist_Dur <- Rides1617 %>% group_by(Start_Year, Start_Month, Start_Day) %>% select(Start_Year:Start_Day, End_Year:End_Day, Total_DurationDays, Trip_DistanceMiles) %>% arrange(desc(Total_DurationDays))
+
+#Create z-score, MAD, and IQR variables 
+Outliers <- Rides_Dist_Dur %>% mutate(Duration_DaysZ = scores(Total_DurationDays, type = "z")) %>% mutate(Duration_DaysMAD = scores(Total_DurationDays, type = "mad")) %>% mutate(Duration_DaysIQR = scores(Total_DurationDays, type="iqr")) %>% mutate(Dist_MilesZ = scores(Trip_DistanceMiles, type = "z")) %>% mutate(Dist_MilesMAD = scores(Trip_DistanceMiles, type = "mad")) %>% mutate(Dist_MilesIQR = scores(Trip_DistanceMiles, type = "iqr"))
+View(Outliers %>% filter(Total_DurationDays>1))
+```
+
+
+
+
+
+
+
+
+
+
