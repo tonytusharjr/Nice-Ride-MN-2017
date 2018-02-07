@@ -136,7 +136,7 @@ Rides_1617 <- Rides_1617 %>% rename(End_Docks=Total_End_Docks)
 #Create new Year-Month-Day variable for join with weather data
 ```{r}
 Rides_1617$Start_Join <- as.Date(with(Rides_1617, paste(Start_Year, Start_Month, Start_Day, sep="-", format = "%Y-%m-%d")))
-View(Rides_1617)
+head(Rides_1617)
 ```
 
 #*Load and view 2016 weather data*
@@ -148,13 +148,13 @@ dim(X16MSPWeatherDaily)
 
 #Select relevant variables
 ```{r}
-Weather_2016 <- X16MSPWeatherDaily %>% select(DATE, AWND, PRCP, SNOW, SNWD, TAVG, WT01:WT03, WT05, WT08)
+Weather_2016 <- X16MSPWeatherDaily %>% select(DATE, AWND, PRCP, SNOW, TAVG, WT01:WT03, WT05, WT08)
 head(Weather_2016)
 ```
 
 #Rename variables
 ```{r}
-Weather_2016 <- Weather_2016 %>% rename(Date = DATE, Avg_Wind = AWND, Precip = PRCP, Snow = SNOW, Snow_Depth = SNWD, Avg_Temp = TAVG, Fog = WT01, Heavy_Fog = WT02, Thunder = WT03, Hail = WT05, Haze = WT08)
+Weather_2016 <- Weather_2016 %>% rename(Date = DATE, Avg_Wind = AWND, Precip = PRCP, Snow = SNOW, Avg_Temp = TAVG, Fog = WT01, Heavy_Fog = WT02, Thunder = WT03, Hail = WT05, Haze = WT08)
 ```
 
 #Replace NA's with 0 for binary variables
@@ -171,13 +171,13 @@ dim(X17MSPWeatherDaily)
 
 #Select relevant variables
 ```{r}
-Weather_2017 <- X17MSPWeatherDaily %>% select(DATE, AWND, PRCP, SNOW, SNWD, TAVG, WT01:WT03, WT05, WT08)
+Weather_2017 <- X17MSPWeatherDaily %>% select(DATE, AWND, PRCP, SNOW, TAVG, WT01:WT03, WT05, WT08)
 head(Weather_2017)
 ```
 
 #Rename variables
 ```{r}
-Weather_2017 <- Weather_2017 %>% rename(Date = DATE, Avg_Wind = AWND, Precip = PRCP, Snow = SNOW, Snow_Depth = SNWD, Avg_Temp = TAVG, Fog = WT01, Heavy_Fog = WT02, Thunder = WT03, Hail = WT05, Haze = WT08)
+Weather_2017 <- Weather_2017 %>% rename(Date = DATE, Avg_Wind = AWND, Precip = PRCP, Snow = SNOW, Avg_Temp = TAVG, Fog = WT01, Heavy_Fog = WT02, Thunder = WT03, Hail = WT05, Haze = WT08)
 ```
 
 #Replace NA's with 0 for binary variables
@@ -185,11 +185,56 @@ Weather_2017 <- Weather_2017 %>% rename(Date = DATE, Avg_Wind = AWND, Precip = P
 Weather_2017 <- Weather_2017 %>% replace_na(list(Fog = 0, Heavy_Fog = 0, Thunder = 0, Hail = 0, Haze = 0))
 ```
 
+#*Load secondary 2016 weather dataset to grab relative humidity*
+```{r}
+X2016MSPWeatherData <- read_csv("2016MSPWeatherData.csv")
+head(X2016MSPWeatherData)
+```
+
+#Select date/time and relative humidity variables
+```{r}
+Weather_B16 <- X2016MSPWeatherData %>% filter(!is.na(DAILYAverageRelativeHumidity)) %>% select(DATE, DAILYAverageRelativeHumidity)
+```
+
+#*Load secondary 2017 weather dataset to grab relative humidity*
+```{r}
+X2017MSPWeatherData <- read_csv("2017MSPWeatherData.csv", 
+    col_types = cols(DATE = col_datetime(format = "%m/%d/%Y %H:%M")))
+head(X2017MSPWeatherData)
+```
+
+#Select date/time and relative humidity variables
+```{r}
+Weather_B17 <- X2017MSPWeatherData %>% filter(!is.na(DAILYAverageRelativeHumidity)) %>% select(DATE, DAILYAverageRelativeHumidity)
+```
+
+#Bind 2016 and 2017 secondary weather dataset
+```{r}
+RelHumid_1617 <- rbind(Weather_B16, Weather_B17)
+RelHumid_1617 <- RelHumid_1617 %>% rename(Rel_Humidity = DAILYAverageRelativeHumidity)
+
+RelHumid_1617 <- RelHumid_1617 %>% mutate(Year = year(DATE))
+RelHumid_1617 <- RelHumid_1617 %>% mutate(Month = month(DATE))
+RelHumid_1617 <- RelHumid_1617 %>% mutate(Day = day(DATE))
+
+RelHumid_1617$DATE <- as.Date(with(RelHumid_1617, paste(Year, Month, Day, sep="-", format = "%Y-%m-%d")))
+RelHumid_1617 <- RelHumid_1617 %>% select(DATE, Rel_Humidity) %>% rename(Date=DATE)
+head(RelHumid_1617)
+dim(RelHumid_1617)
+```
+
 #Bind 2016 and 2017 daily weather
 ```{r}
 Weather_1617 <- rbind(Weather_2016, Weather_2017)
 head(Weather_1617)
 dim(Weather_1617)
+```
+
+#Join weather datasets
+```{r}
+Weather_1617 <- full_join(Weather_1617, RelHumid_1617, by = c("Date" = "Date"))
+Weather_1617 <- Weather_1617 %>% select(1,5, 2, 3, 4, 11, 6:10)
+head(Weather_1617)
 ```
 
 #Join Rides and Weather data
@@ -206,7 +251,7 @@ Nice_Ride_1617 <- Nice_Ride_1617 %>% mutate(Weekend = ifelse(isWeekend(Start_Dat
 
 #Rearrange variables in dataset
 ```{r}
-Nice_Ride_1617 <- Nice_Ride_1617 %>% select(Start_DoWeek, Weekend, Start_Year:Start_Hour, Start_Station:Start_Docks,  End_Year:End_Hour, End_Station:Account_Type, Avg_Wind:Haze, -Start_Date, -Start_Join, -End_Date, -Start_Hour, -End_Hour)
+Nice_Ride_1617 <- Nice_Ride_1617 %>% select(Start_DoWeek, Weekend, Start_Year:Start_Hour, Start_Station:Start_Docks,  End_Year:End_Hour, End_Station:Account_Type, Avg_Temp:Haze, -Start_Date, -Start_Join, -End_Date, -Start_Hour, -End_Hour)
 head(Nice_Ride_1617)
 ```
 
@@ -245,7 +290,7 @@ Nice_Ride_1617 <- Nice_Ride_1617 %>% mutate(Trip_DistanceMiles = Trip_DistanceKM
 
 #One last rearrange of variables
 ```{r}
-Nice_Ride_1617 <- Nice_Ride_1617 %>% select(1:17, 29, 31, 18:28, -30)
+Nice_Ride_1617 <- Nice_Ride_1617 %>% select(1:17, 29, 31, 18:28)
 ```
 
 #Replace two off values in Account_Type variable
@@ -258,7 +303,6 @@ table(Nice_Ride_1617$Account_Type)
 #Save tidy data
 ```{r}
 setwd("~/Nice Ride MN 2017/Nice-Ride-MN-2017")
-View(Nice_Ride_1617)
 write_csv(Nice_Ride_1617, "Nice_Ride_1617.csv")
 ```
 
