@@ -1,17 +1,85 @@
 ---
-title: "Nice Ride Stat Report"
-author: "Tony Tushar Jr"
-date: "February 2, 2018"
-output:
+title: "Nice Ride Capstone Project Statistical Report"
+author: '[Tony Tushar Jr](mailto:tonytusharjr@gmail.com)'
+date: '`r format(Sys.time(), "%B %d, %Y")`'
+output: 
   html_document:
     df_print: paged
+    toc: yes
+    toc_depth: '4'
+  html_notebook:
+    fig_caption: yes
+    fig_height: 6
+    toc: yes
+    toc_depth: 4
+    toc_float: no
 ---
 
+# Purpose of Report
+
+This Exploratory Data Analysis (EDA) serves as a starting point for understanding the Nice Ride MN 2016-2017 dataset previously created and documented [here](https://github.com/tonytusharjr/Nice-Ride-MN-2017/blob/master/Nice%20Ride%20Data%201617.Rmd).
+
+**Two main questions for this report and ultimate purpose of this capstone project:**
+
+*Main Questions:*
+  - What are the effects of weather on bikeshare volume?
+  - How do weather effects on bikeshare volume differ between member and casual account types?
+
+*Purpose of Capstone Project:*
+  - To provide a predictive model for 2018 weekly bikeshare volume based on the input of weather forecast variables and analysis of prior bikeshare seasons.
+
+In this EDA we will perform the following steps:
+
+**1. General exploration of dataset:**
+  - What is the distribution of trips per month, by year?
+  - What is the distribution of trips per day of the week, by account type?
+  - What is the distibution of trips by weekday and weekend for the season, by year, by account type?
+  - Summary of trip distance in miles
+  - Summary of trip duration in minutes
+
+**2. Pearson's product-moment correlations for the effects of primary weather variables on bikeshare volume:**
+- Effect of average temperature
+- Effect of average wind speed
+- Effect of precipitation
+- Effect of relative humidity
+- Effect of heat index
+
+**3. Welch Two Sample t-tests for measuring variances in average general biking characteristics and primary weather variables for member and casual bike account types:**
+- Trip duration
+- Trip distance
+- Temperature
+- Relative Humidity
+- Heat index
+
+**4. Conclusion: Brief summary of findings, mention of further possible exploration, and next steps in predictive modeling process**
+
+## Caveats
+
+*Through this analysis outliers were uncovered for roughly 1500 observations for the trip duration variables. They represent less than one percent of the total observations and were removed prior conducting statistical tests.* 
+
 ```{r setup, include=FALSE}
+rm(list = ls())
+list.of.packages <- c("tidyverse", "reader", "ggthemes", "lubridate", "weathermetrics")
+
+new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+
+if(length(new.packages)) install.packages(new.packages)
+lapply(list.of.packages, require, character.only=T)
+
+options(readr.show_progress=FALSE)
+
+knitr::opts_chunk$set(warning=FALSE, message=FALSE)
+select <- dplyr::select
 ```
 
-----
-```{r include=FALSE}
+# Load dataset, set ggplot theme, run multi plot function, and preview variables
+
+```{r loading data, message=FALSE, include=FALSE}
+Rides1617 <- read_csv("Nice_Ride_1617.csv")
+theme_set(theme_tufte())
+```
+
+```{r multi plot, include=FALSE}
 # Multiple plot function
 #
 # ggplot objects can be passed in ..., or to plotlist (as a list of ggplot objects)
@@ -59,115 +127,80 @@ multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
 }
 ```
 
-
-This Exploratory Data Analysis (EDA) serves as a starting point for understanding our dataset prior regression and machine learning applications. A reminder of our two main questions and ultimate purpose of this project:
-
-Two Main Questions:
-- What is the affect of weather on bikeshare volume?
-- How does the affect of weather on bikeshare volume differ between member and casual account types?
-
-Ultimate Purpose:
-- To provide a predictive model for weekly bikeshare volume based on the input of weather forecast variables.
-
-In this EDA we will perform the following steps:
-
-1. General exploration of dataset:
-- What is the distribution of trips per month, by year?
-- What is the distribution of trips per day of the week, by account type?
-- What is the distibution of trips by weekday and weekend for the season, by year, by account type?
-- Summary of trip distance in miles
-- Summary of trip duration in minutes
-- Are there outliers to address? If so, how are they to be addressed?
-
-2. Pearson's product-moment correlations for the affects of primary weather variables on bikeshare volume:
-- Affect of average temperature
-- Affect of average wind speed
-- Affect of precipitation
-- Affect of relative humidity
-- Affect of heat index
-
-3. T-tests for primary weather variables and relationship to bike count by account type, member and casual:
-
-4. Conclusions, next steps:
-
-#Load packages
-```{r}
-library(tidyverse)
-library(readr)
-library(ggthemes)
-library(lubridate)
+```{r view main dataset}
+head(Rides1617)
 ```
 
-#Load dataset
-```{r}
-Rides1617 <- read_csv("Nice_Ride_1617.csv")
-View(Rides1617)
-```
+# 1. General exploration of dataset:
 
-#1. General exploration of dataset:
-
-##- What is the distribution of trips per month, for 2016-2017 seasons?
-```{r}
+## Distribution of trips by month, for 2016-2017 seasons
+```{r echo=FALSE}
 #Create data subset
 Trips_Month <- Rides1617 %>% count(Start_Year, Start_Month) %>% mutate(Percent_Year = prop.table(n))
-head(Trips_Month, n=12)
+head(Trips_Month)
 
 #Setup plot properties for possible reuse
 gg_prop_Month <- ggplot(data = data.frame(), aes(x = Start_Month, y = Percent_Year, fill = factor(Start_Year))) + 
-  geom_bar(stat = 'identity', position = 'dodge', alpha = 2/3) + labs(x = "Start Month", y = "Percentage", title="Trip Distribution by Month, 2016-2017", subtitle="Heavy road construction in 2016, possible cause of trip volume differences for July and September")
+  geom_bar(stat = 'identity', position = 'dodge', alpha = 2/3) + labs(x = "Start Month", y = "Percentage", title="Trip Distribution by Month, 2016-2017", fill="Year")
 
 #Plot data
 gg_prop_Month %+% Trips_Month 
 ```
-Trip distrubution is fairly even for a year-over-year comparison, however, July and September show larger variation. Research shows that 2016 was a particularly dense season of road construction, as Minneapolis installed biking lanes throughout the metro. This factor is likely a contributor to the variance between 2016 and 2017, however, we cannot control for construction data other than to note here.
 
-##- What is the distribution of trips per day of the week, by account type?
-```{r}
+> Trip distrubution shows greatest variance year-over-year during the summer months. It is possible road construction played a larger role in 2016 than 2017, impacting ride volume negatively. However, it is difficult to control for road construction from one year to the next, this is simply a hypothesis to note but not investigate in the scope of this project.
+
+## Distribution of trips per day of the week, by account type
+```{r echo=FALSE}
 #Reorder days of the week
 Rides1617$Start_DoWeek <- ordered(Rides1617$Start_DoWeek, levels=c("Sun", "Mon", "Tue", "Wed", "Thu", 
 "Fri", "Sat"))
 
 #Create data subset
 Trips_Week <- Rides1617 %>% count(Start_Year, Start_DoWeek, Account_Type) %>% mutate(Percent_Year = prop.table(n))
-head(Trips_Week, n=12)
+head(Trips_Week)
 
 #Setup plot properties for possible reuse
 gg_prop_Week <- ggplot(data = data.frame(), aes(x = Start_DoWeek, y = Percent_Year, fill = factor(Account_Type))) + 
-  geom_bar(stat = 'identity', position = 'dodge', alpha = 2/3) + facet_grid(Start_Year ~ .) + labs(x = "Day of the Week", y = "Percentage", title="Trip Distribution by Day and Account Type, 2016-2017", subtitle="Distribution for casual and member account types are inverse of each other", fill="Account Type")
+  geom_bar(stat = 'identity', position = 'dodge', alpha = 2/3) + facet_grid(Start_Year ~ .) + labs(x = "Day of the Week", y = "Percentage", title="Trip Distribution by Day and Account Type, 2016-2017", fill="Account Type")
 
 #Plot data
 gg_prop_Week %+% Trips_Week 
 ```
-Daily distribution by year confirms consistency year-over-year, member riders are utilizing bikshare for commuting purposes while casual riders utilize bikeshare for leisure.
 
-##- What is the distibution of trips per year by account type?
-```{r}
+> Daily distribution by year confirms consistency year-over-year, member riders are utilizing bikshare for commuting purposes while casual riders utilize bikeshare for leisure, inverse of one another. An hourly breakdown of bike volume would further detail this observation, however, this is not relevant to the greater scope of our project purpose.
+
+## Distibution of trips per year by account type
+```{r echo=FALSE}
 #Create data subset
 Trips_Account <- Rides1617 %>% count(Start_Year, Start_Month, Start_Day, Weekend, Account_Type) 
 Trips_Account16 <- Trips_Account %>% mutate(Dates = as.Date(paste(Start_Year, Start_Month, Start_Day, sep='-'))) %>% filter(Start_Year==2016) 
 Trips_Account17 <- Trips_Account %>% mutate(Dates = as.Date(paste(Start_Year, Start_Month, Start_Day, sep='-'))) %>% filter(Start_Year==2017) 
 
 #Setup plot properties for possible reuse
-gg_prop_Account <- ggplot(data = data.frame(), aes(x = Dates, y = n, color=factor(Account_Type))) + 
-  geom_point(size=3, alpha = 2/3) + geom_jitter() + labs(x = "Date", y = "Total Rides", title="Trip Distribution by Weekday and Weekend", subtitle="", color="Account Type")
+gg_prop_Account16 <- ggplot(data = data.frame(), aes(x = Dates, y = n, color=factor(Account_Type))) + 
+  geom_point(size=3, alpha = 2/3) + geom_jitter() + labs(x = "Date", y = "Total Rides", title="Trip Distribution by Month", subtitle="2016", color="Account Type")
+
+gg_prop_Account17 <- ggplot(data = data.frame(), aes(x = Dates, y = n, color=factor(Account_Type))) + 
+  geom_point(size=3, alpha = 2/3) + geom_jitter() + labs(x = "Date", y = "Total Rides", title="Trip Distribution by Month", subtitle="2017", color="Account Type")
 
 #Plot data
-multiplot(gg_prop_Account %+% Trips_Account16, gg_prop_Account %+% Trips_Account17)
+multiplot(gg_prop_Account16 %+% Trips_Account16, gg_prop_Account17 %+% Trips_Account17)
 ```
 
-##- Summary of trip distance
-```{r}
+> Member rides dominant casual year-over-year. Both bike seasons demonstrate a convex shape visually, ride volume peaks in the summer months. It is worth noting that 2017 demonstrates more frequent peak volume points for casual riders above members, perhaps these max points are related to holidays or city-wide events? 
+
+## Summary of trip distance
+```{r echo=FALSE}
 summary(Rides1617$Trip_DistanceMiles)
 ```
-Median trip distance is 1.944 miles while the max is 29 miles, is this logical in comparison to trip duration?
+> Median trip distance is 1.944 miles while the max is 29 miles, is this logical in comparison to trip duration?
 
-##- Summary of trip duration in minutes
-```{r}
+## Summary of trip duration in minutes
+```{r echo=FALSE}
 summary(Rides1617$Total_DurationMin)  
 ```
-It is odd to see a max ride observation of over 280,000 minutes, this equates to 194 days! How many bike rides are greater than one day?
+> It is odd to see a max ride observation of over 280,000 minutes, this equates to 194 days! How many bike rides are greater than one day? This is the process by which we can determine outliers as previously mentioned.
 
-##- Are there outliers to address? If so, how are they to be addressed?
 ```{r}
 # What percentage of bike rides are over one day in length?
 # Trips equal to or less than one day
@@ -177,16 +210,30 @@ Day_Length <- nrow(Rides_Day)
 
 sum(Rides_Day$Total_DurationDay/Day_Length)
 ```
-There are 1,498 observations in which ride duration is greater than one day, this accounts for less than 0.02% of our dataset. As our intended outcome of this study is to create a predictive model for daily trips as related to daily weather, we will consider these observations as outliers and remove them.
+> There are 1,498 observations in which ride duration is greater than one day, this accounts for less than 0.02% of our dataset. As our intended outcome of this study is to create a predictive model for daily trips as related to daily weather, we consider these observations as outliers and remove them.
 
-#Remove outliers from dataset
-```{r}
+## Remove outliers from dataset
+```{r echo=FALSE}
 Rides1617_Mod <- Rides1617 %>% filter(Total_DurationMin<=24*60)
 ```
 
-#2. Correlation testing for the affects of primary weather variables on bikeshare volume:
-##- Affect of average temperature
-```{r}
+```{r echo=FALSE}
+setwd("~/Nice Ride MN 2017/Nice-Ride-MN-2017")
+NiceRide1617_Out <- Rides1617_Mod
+write_csv(NiceRide1617_Out, "NiceRide1617_Out.csv")
+```
+
+> Now that we are working with a modified dataset absent of outliers, we should also consider adding a heat index variable to this dataset, as heat index more accurately captures the "feel temperature" of a given observation.
+
+```{r echo=FALSE}
+#Add Heat Index variable to dataset
+Rides1617_Mod <- Rides1617_Mod %>% mutate(Heat_Index = heat.index(t=Avg_Temp, rh=Rel_Humidity))
+```
+
+# 2. Correlation testing for the effects of primary weather variables on bikeshare volume:
+
+## Effect of average temperature
+```{r echo=FALSE}
 # Data subset
 Temp <- Rides1617_Mod %>% select(Start_Year:Start_Day, Account_Type, Avg_Temp) %>% group_by(Start_Year, Start_Month, Start_Day, Account_Type, Avg_Temp) %>% tally()  
 
@@ -195,17 +242,16 @@ Cor_Temp <- cor.test(x = Temp$Avg_Temp, y = Temp$n)
 
 Cor_Temp
 ```
-Null hypothesis: the correlation of average daily temperature to daily bike count is 0
-Correlation test results show we reject the null hypothesis for 95% confidence in correleation between average daily temperature and bike count
 
-#Plot correlation test results
-```{r}
+```{r echo=FALSE}
 plot_cor_temp <- ggplot(Temp, aes(Avg_Temp, n))
-plot_cor_temp + geom_point() + geom_smooth(method="lm") + labs(x = "Avg Temp (F)", y = "Bike Count", title = "Average Daily Temp and Bike Count, 2016-2017 Seasons", subtitle="Pearson's product-moment correlation, p-value < 2.2e-16, corr. coef r = 0.47")
+plot_cor_temp + geom_point() + geom_smooth(method="lm") + labs(x = "Avg Temp (F)", y = "Bike Count", title = "Average Daily Temperature and Bike Count", subtitle = "2016-2017 Seasons")
 ```
 
-##- Affect of average wind speed
-```{r}
+> Null hypothesis: there is no correlation between average daily temperature and bike volume. We reject the null hypothesis based on the statistical significance of a p value less than 0.05 and a correlation coefficient of 0.47.
+
+## Effect of average wind speed
+```{r echo=FALSE}
 # Data subset
 Wind <- Rides1617_Mod %>% select(Start_Year:Start_Day, Account_Type, Avg_Wind) %>% group_by(Start_Year, Start_Month, Start_Day, Account_Type, Avg_Wind) %>% tally()  
 
@@ -214,17 +260,16 @@ Cor_Wind <- cor.test(x = Wind$Avg_Wind, y = Wind$n)
 
 Cor_Wind
 ```
-Null hypothesis: the correlation of average daily wind to daily bike count is 0
-Correlation test results show we reject the null hypothesis for 95% confidence in a negative correlation between average daily wind speed and bike count
 
-#Plot correlation test results
-```{r}
+```{r echo=FALSE}
 plot_cor_wind <- ggplot(Wind, aes(Avg_Wind, n))
-plot_cor_wind + geom_point() + geom_smooth(method="lm") + labs(x = "Avg Wind (mph)", y = "Bike Count", title = "Average Daily Wind Speed and Bike Count, 2016-2017 Seasons", subtitle="Pearson's product-moment correlation, p-value = 3.067e-10, corr. coef r = -0.21")
+plot_cor_wind + geom_point() + geom_smooth(method="lm") + labs(x = "Avg Wind (Mph)", y = "Bike Count", title = "Average Daily Wind Speed and Bike Count", subtitle="2016-2017 Seasons")
 ```
 
-##- Affect of precipitation
-```{r}
+> Null hypothesis: there is no correlation of average daily wind to daily bike count. We reject the null hypothesis based on the statistical significance of a p value less than 0.05 and a correlation coefficient of -0.21.
+
+## Effect of precipitation
+```{r echo=FALSE}
 # Data subset
 Precip <- Rides1617_Mod %>% select(Start_Year:Start_Day, Account_Type, Precip) %>% group_by(Start_Year, Start_Month, Start_Day, Account_Type, Precip) %>% tally()  
 
@@ -233,128 +278,129 @@ Cor_Precip <- cor.test(x = Precip$Precip, y = Precip$n)
 
 Cor_Precip
 ```
-Null hypothesis: the correlation of daily precipiration to bike count is 0
-Correlation test results show we reject the null hypothesis for 95% confidence in a negative correlation between daily precipitation and bike count.
 
-#Plot correlation test results
-```{r}
+```{r echo=FALSE}
 plot_cor_precip <- ggplot(Precip, aes(Precip, n))
-plot_cor_precip + geom_point() + geom_smooth(method="lm") + labs(x = "Precipitation (inches)", y = "Bike Count", title = "Daily Precipitation and Bike Count, 2016-2017 Seasons", subtitle="Pearson's product-moment correlation, p-value = 4.695e-09, corr. coef r = -0.20")
+plot_cor_precip + geom_point() + geom_smooth(method="lm") + labs(x = "Precipitation (Inches)", y = "Bike Count", title = "Daily Precipitation and Bike Count", subtitle="2016-2017 Seasons")
 ```
 
-- Affect of Relative Humidity
-- Affect of Heat Index
+> Null hypothesis: There is no correlation between precipitation and bike volume. We reject the null hypothesis based on the statistical significance of a p value less than 0.05 and an inverse correlation coefficient of -0.20.
 
+## Effect of relative humidity
+```{r echo=FALSE}
+# Data subset
+Humidity <- Rides1617_Mod %>% select(Start_Year:Start_Day, Account_Type, Rel_Humidity) %>% group_by(Start_Year, Start_Month, Start_Day, Account_Type, Rel_Humidity) %>% tally()  
 
+#Correlation test between daily precipitation and bike count
+Cor_Humidity <- cor.test(x = Humidity$Rel_Humidity, y = Humidity$n)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-----
-#Multiplot function
-```{r include=FALSE}
-# Multiple plot function
-#
-# ggplot objects can be passed in ..., or to plotlist (as a list of ggplot objects)
-# - cols:   Number of columns in layout
-# - layout: A matrix specifying the layout. If present, 'cols' is ignored.
-#
-# If the layout is something like matrix(c(1,2,3,3), nrow=2, byrow=TRUE),
-# then plot 1 will go in the upper left, 2 will go in the upper right, and
-# 3 will go all the way across the bottom.
-#
-multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
-  library(grid)
-
-  # Make a list from the ... arguments and plotlist
-  plots <- c(list(...), plotlist)
-
-  numPlots = length(plots)
-
-  # If layout is NULL, then use 'cols' to determine layout
-  if (is.null(layout)) {
-    # Make the panel
-    # ncol: Number of columns of plots
-    # nrow: Number of rows needed, calculated from # of cols
-    layout <- matrix(seq(1, cols * ceiling(numPlots/cols)),
-                    ncol = cols, nrow = ceiling(numPlots/cols))
-  }
-
- if (numPlots==1) {
-    print(plots[[1]])
-
-  } else {
-    # Set up the page
-    grid.newpage()
-    pushViewport(viewport(layout = grid.layout(nrow(layout), ncol(layout))))
-
-    # Make each plot, in the correct location
-    for (i in 1:numPlots) {
-      # Get the i,j matrix positions of the regions that contain this subplot
-      matchidx <- as.data.frame(which(layout == i, arr.ind = TRUE))
-
-      print(plots[[i]], vp = viewport(layout.pos.row = matchidx$row,
-                                      layout.pos.col = matchidx$col))
-    }
-  }
-}
+Cor_Humidity
 ```
 
+```{r echo=FALSE}
+plot_cor_humidity <- ggplot(Humidity, aes(Rel_Humidity, n))
+plot_cor_humidity + geom_point() + geom_smooth(method="lm") + labs(x = "Relative Humidity", y = "Bike Count", title = "Daily Relative Humidity and Bike Count", subtitle="2016-2017 Seasons")
+```
+
+> Null hypothesis: There is no correlation between relative humidity and bike volume. We reject the null hypothesis based on the statistical significance of a p value less than 0.05 and an inverse correlation coefficient of -0.29.
+
+## Effect of heat index
+```{r echo=FALSE}
+# Data subset
+Heat_Index <- Rides1617_Mod %>% select(Start_Year:Start_Day, Account_Type, Heat_Index) %>% group_by(Start_Year, Start_Month, Start_Day, Account_Type, Heat_Index) %>% tally()  
+
+#Correlation test between daily precipitation and bike count
+Cor_Heat <- cor.test(x = Heat_Index$Heat_Index, y = Heat_Index$n)
+
+Cor_Heat
+```
+
+```{r echo=FALSE}
+plot_cor_heat <- ggplot(Heat_Index, aes(Heat_Index, n))
+plot_cor_heat + geom_point() + geom_smooth(method="lm") + labs(x = "Heat Index", y = "Bike Count", title = "Daily Heat Index and Bike Count", subtitle="2016-2017 Seasons")
+```
+
+> Null hypothesis: There is no correlation between heat index and bike volume. We reject the null hypothesis based on the statistical significance of a p value less than 0.05 and a correlation coefficient of 0.43.
+
+# 3. Welch Two Sample t-tests for measuring variances in average general biking characteristics and primary weather variables for member and casual bike account types:
+
+```{r echo=FALSE}
+#Data subset
+Account_Tests <- Rides1617_Mod %>% select(Account_Type, Avg_Temp, Avg_Wind, Precip, Rel_Humidity, Heat_Index, Total_DurationMin, Trip_DistanceMiles)
+```
+
+## Trip duration
+```{r}
+t.test(data=Account_Tests, Total_DurationMin~Account_Type)
+```
+
+> Null hypothesis (H0): There is no difference in the mean trip duration of member and casual account types. Alternative hypothesis (H1): There is a difference in the mean trip duration of member and casual account types. In this case, we reject the null hypothesis as the probability of there being no difference in mean trip duration for account types is very, very small. *On average, casual bike riders favor bike trips longer than members.* 
+
+## Trip distance
+```{r}
+t.test(data=Account_Tests, Trip_DistanceMiles~Account_Type)
+```
+
+> Null hypothesis (H0): There is no difference in the mean trip distance of member and casual account types. Alternative hypothesis (H1): There is a difference in the mean trip distance of member and casual account types. In this case, we reject the null hypothesis as the probability of there being no difference in mean trip distance for account types is very, very small. *On average, casual bike riders favor a slightly longer riding distance.* 
+
+## Temperature
+```{r}
+t.test(data=Account_Tests, Avg_Temp~Account_Type)
+```
+
+> Null hypothesis (H0): There is no difference in the mean temperature of member and casual account types. Alternative hypothesis (H1): There is a difference in the mean temperatures of member and casual account types. In this case, we reject the null hypothesis as the probability of there being no difference in mean temperature for account types is very, very small. *On average, casual bike riders favor a slightly warmer average temperature than member riders.*
 
 
+## Wind Speed
+```{r}
+t.test(data=Account_Tests, Avg_Wind~Account_Type)
+```
 
+> Null hypothesis (H0): There is no difference in the mean wind speed of member and casual account types. Alternative hypothesis (H1): There is a difference in the mean wind speed of member and casual account types. In this case, we reject the null hypothesis as the probability of there being no difference in mean riding distance for account types is very, very small. *On average, casual bike riders favor a slightly lower wind speed for riding compared to member riders.*
 
+## Precipitation
+```{r}
+t.test(data=Account_Tests, Precip~Account_Type)
+```
 
+> Null hypothesis (H0): There is no difference in the mean precipiation of member and casual account type rides. Alternative hypothesis (H1): There is a difference in the mean precipiation of member and casual account type rides. In this case, we reject the null hypothesis as the probability of there being no difference in mean precipitation for account types is very, very small. *On average, casual bike riders favor less precipitation while riding compared to member riders.*
 
+## Relative humidity
+```{r}
+t.test(data=Account_Tests, Rel_Humidity~Account_Type)
+```
 
+> Null hypothesis (H0): There is no difference in the mean relative humidity of member and casual account type rides. Alternative hypothesis (H1): There is a difference in the mean relative humidity of member and casual account type rides. In this case, we reject the null hypothesis as the probability of there being no difference in mean relative humidity for account types is very, very small. *On average, casual bike riders favor lower relative humidity while riding compared to member riders.*
 
+## Heat index
+```{r}
+t.test(data=Account_Tests, Heat_Index~Account_Type)
+```
 
+> Null hypothesis (H0): There is no difference in the mean heat index of member and casual account type rides. Alternative hypothesis (H1): There is a difference in the mean heat index of member and casual account type rides. In this case, we reject the null hypothesis as the probability of there being no difference in mean heat index for account types is very, very small. *On average, casual bike riders favor a higher heat index for riding compared to member riders.*
 
+# 4. Conclusion: Brief summary of findings, mention of possible further exploration, and next steps in predictive modeling process
+
+## Brief summary of findings:
+
+All t-tests resulted in rejecting the null hypothesis as there was little probabilty for a difference of zero between member and casual account type ride characteristics in relation to the average observations of trip distance, trip duration, and primary weather variables. Running t-tests to compare trip distance and duration between the two groups, we determined a high probabilty that casual rider trip duration is on average over twice as long as member trip duration. As for trip distance, we reject the null hypothesis that there is no difference in trip distance between account types. However this was our weakest p value for all t-tests conducted. While there is a difference in average trip distance by account type, the difference is minimal.
+
+In comparison to casual riders, member riders appear more willing to handle average weather variables in the following manner:
+
++ Lower temperatures
++ Higher wind speed
++ Higher precipitation
++ Higher relative humidty
++ Lower heat index
+
+## Possible further exploration:
+
+We have not analyzed the secondary, binomial weather variables that detail various weather types as "yes" or "no" for a given ride observation. This study did include propability tests comparing the likelihood that weather types such as fog, heavy fog, thunder, hail, and haze; in which we found that probabilities for bike rides by members were higher for these weather conditions present than for casual riders. We will explore the impact of these categorical independent variables in greater detail when conducting regression analysis and weighting the variables for machine learning applications.
+
+## Next steps in predictive modeling process:
+
+(1) Apply linear regression to the dataset
+(2) Determine supervised or unsupervised approach to the model
+(3) Determine which machine learning technique to use
+(4) Decide on evaluation metrics for determining quality of predictive model
+(5) consider ways to visualize the predictive model.  
