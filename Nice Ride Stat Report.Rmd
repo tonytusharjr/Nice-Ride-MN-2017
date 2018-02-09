@@ -22,22 +22,26 @@ This Exploratory Data Analysis (EDA) serves as a starting point for understandin
 **Two main questions for this report and ultimate purpose of this capstone project:**
 
 *Main Questions:*
-  - What are the effects of weather on bikeshare volume?
-  - How do weather effects on bikeshare volume differ between member and casual account types?
+
+- What are the effects of weather on bikeshare volume?
+- How do weather effects on bikeshare volume differ between member and casual account types?
 
 *Purpose of Capstone Project:*
-  - To provide a predictive model for 2018 weekly bikeshare volume based on the input of weather forecast variables and analysis of prior bikeshare seasons.
+
+- To provide a predictive model for 2018 weekly bikeshare volume based on the input of weather forecast variables and analysis of prior bikeshare seasons.
 
 In this EDA we will perform the following steps:
 
 **1. General exploration of dataset:**
-  - What is the distribution of trips per month, by year?
-  - What is the distribution of trips per day of the week, by account type?
-  - What is the distibution of trips by weekday and weekend for the season, by year, by account type?
-  - Summary of trip distance in miles
-  - Summary of trip duration in minutes
+
+- What is the distribution of trips per month, by year?
+- What is the distribution of trips per day of the week, by account type?
+- What is the distibution of trips by weekday and weekend for the season, by year, by account type?
+- Summary of trip distance in miles
+- Summary of trip duration in minutes
 
 **2. Pearson's product-moment correlations for the effects of primary weather variables on bikeshare volume:**
+
 - Effect of average temperature
 - Effect of average wind speed
 - Effect of precipitation
@@ -45,6 +49,7 @@ In this EDA we will perform the following steps:
 - Effect of heat index
 
 **3. Welch Two Sample t-tests for measuring variances in average general biking characteristics and primary weather variables for member and casual bike account types:**
+
 - Trip duration
 - Trip distance
 - Temperature
@@ -403,4 +408,8 @@ We have not analyzed the secondary, binomial weather variables that detail vario
 (2) Determine supervised or unsupervised approach to the model
 (3) Determine which machine learning technique to use
 (4) Decide on evaluation metrics for determining quality of predictive model
-(5) consider ways to visualize the predictive model.  
+(5) consider ways to visualize the predictive model
+
+
+
+
