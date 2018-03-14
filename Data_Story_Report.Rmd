@@ -17,7 +17,6 @@ output:
     toc_depth: 4
     toc_float: no
 ---
-[# Use this link to view in html:](http://htmlpreview.github.io/?https://github.com/tonytusharjr/Nice-Ride-MN-2017/blob/master/Data_Story_Report.html)
 
 ## What is the business problem in need of solving and what are the main questions at hand?
 
