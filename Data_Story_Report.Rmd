@@ -1,0 +1,116 @@
+---
+title: "Nice Ride Capstone Data Story Report"
+author: '[Tony Tushar Jr](mailto:tonytusharjr@gmail.com)'
+date: '`r format(Sys.time(), "%B %d, %Y")`'
+output:
+  html_document:
+    df_print: paged
+    toc: yes
+    toc_depth: '2'
+  pdf_document:
+    toc: yes
+    toc_depth: '4'
+  html_notebook:
+    fig_caption: yes
+    fig_height: 6
+    toc: yes
+    toc_depth: 4
+    toc_float: no
+---
+
+## What is the business problem in need of solving and what are the main questions at hand?
+
+> I plan to analyze Nice Ride MN bike share program data alongside historical weather data, in order to explore opportunities for optimizing the program operations and revenue.
+
+> Two main questions for the analysis:
+- What are the effects of weather on bikeshare volume?
+- How do weather effects on bikeshare volume differ between member and casual account types?
+
+## Who is your client and why do they care about this problem? In other words, what will your client DO or DECIDE based on your analysis that they wouldn't have otherwise?
+
+> The client is Nice Ride MN and this research is timely, as Nice Ride MN is in the process of accepting bids from for-profit bike share programs in order to phase out their non-profit operation. Considering the current circumstances of the program, it is beneficial to analyze bike share user behavior to determine if certain business decisions might increase operational efficiency or increase revenue potential.
+
+## What important fields and information does the data set have?
+
+> Important fields in our data include daily observations for casual and member riders trip duration and distance, along with weather variables such as average temperature, precipitation, and occuring weather types (i.e. hail, snow, thunder). This is a rich dataset offering the opportunity to understand public bike share behavior for two differing price structures. Exploration of the data shows differing use behavior for casual and member customers based on day of the week, time of day and responses to weather scenarios. Analyzing bike use behavior and correlations to weather scenarios allows for insights related to optimal maintenance scheduling and any potential price restructuring for strategies related to revenue and growth.
+
+## What are its limitations i.e. what are some questions that you cannot answer with this data set?
+
+> We are unable to factor in the effects of historical city construction projects. The data include two bike seasons, 2016-2017, and span a duration from early April to early November. During exploratory data analysis a trend of greater biking volume was noticed for 2017 in comparison to 2016. Based on research and potentially backed by domain knowledge, there was a greater volume of city construction projects in 2016 compared to 2017, this might be a uncontrollable variable in our analysis.
+
+## What kind of cleaning and wrangling did you need to do?
+
+> The Nice Ride MN bikeshare datasets required little data wrangling other than renaming a few columns based on preference, formatting the date and time columns to match with the weather data, and a full join to match the dock station data with the trip history data. Joining bikeshare volume with daily weather averages provided to be a more challenging task. Initially the data was formatted based on hourly weather and riding observations, however, the hourly weather data provided multiple observations per hour causing excessive noise. It was decided that a more reliable and consistent dataset could be created using daily weather averages for joining with ride observations. 
+
+## Any preliminary exploration you’ve performed and your initial findings.
+
+```{r setup, include=FALSE}
+rm(list = ls())
+list.of.packages <- c("tidyverse", "reader", "ggthemes", "lubridate", "weathermetrics")
+
+new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+
+if(length(new.packages)) install.packages(new.packages)
+lapply(list.of.packages, require, character.only=T)
+
+options(readr.show_progress=FALSE)
+
+select <- dplyr::select
+```
+
+```{r loading data, message=FALSE, include=FALSE}
+Rides1617 <- read_csv("Nice_Ride_1617.csv")
+theme_set(theme_tufte())
+```
+
+```{r echo=FALSE}
+#Create data subset
+Trips_Month <- Rides1617 %>% count(Start_Year, Start_Month) %>% mutate(Percent_Year = prop.table(n))
+head(Trips_Month)
+
+#Setup plot properties for possible reuse
+gg_prop_Month <- ggplot(data = data.frame(), aes(x = Start_Month, y = Percent_Year, fill = factor(Start_Year))) + 
+  geom_bar(stat = 'identity', position = 'dodge', alpha = 2/3) + labs(x = "Start Month", y = "Percentage", title="Trip Distribution by Month, 2016-2017", fill="Year")
+
+#Plot data
+gg_prop_Month %+% Trips_Month 
+```
+
+> Trip distrubution shows greatest variance year-over-year during the summer months. It is possible road construction played a larger role in 2016 than 2017, impacting ride volume negatively. However, it is difficult to control for road construction from one year to the next, this is simply a hypothesis to note but not investigate in the scope of this project.
+
+```{r echo=FALSE}
+#Reorder days of the week
+Rides1617$Start_DoWeek <- ordered(Rides1617$Start_DoWeek, levels=c("Sun", "Mon", "Tue", "Wed", "Thu", 
+"Fri", "Sat"))
+
+#Create data subset
+Trips_Week <- Rides1617 %>% count(Start_Year, Start_DoWeek, Account_Type) %>% mutate(Percent_Year = prop.table(n))
+head(Trips_Week)
+
+#Setup plot properties for possible reuse
+gg_prop_Week <- ggplot(data = data.frame(), aes(x = Start_DoWeek, y = Percent_Year, fill = factor(Account_Type))) + 
+  geom_bar(stat = 'identity', position = 'dodge', alpha = 2/3) + facet_grid(Start_Year ~ .) + labs(x = "Day of the Week", y = "Percentage", title="Trip Distribution by Day and Account Type, 2016-2017", fill="Account Type")
+
+#Plot data
+gg_prop_Week %+% Trips_Week 
+```
+
+> Daily distribution by year confirms consistency year-over-year, member riders are utilizing bikshare for commuting purposes while casual riders utilize bikeshare for leisure, inverse of one another. An hourly breakdown of bike volume would further detail this observation, however, this is not relevant to the greater scope of our project purpose.
+
+> Exploring outliers in the data - observations falling outside a normal range - it was realized that 1,498 observations held a trip duration greater than one day, It is possible that some of the observations appears to be greater than one day based on midnight passing during a bike ride. Further examination determined that a few trips did not fit this possibility and were recorded as lasting almost the entire bike season! We may have uncovered a few faulty bike recording mechanisms for bikes in maintenance. We removed these observations before continuing our analysis to see the strength of correlation between bike use and various weather varibales. 
+
+> Based on statistical analysis exploring the strength of relationships between bike volume and weather variables such as temperature, precipitation, wind speed, and humidity, we uncovered the following insights:
+
+> In comparison to casual riders, member riders appear more willing to ride in average weather variables of the following manner:
+
+> + Lower temperatures
++ Higher wind speed
++ Higher precipitation
++ Higher relative humidty
++ Lower heat index
+
+## Based on these findings, what approach are you going to take? How has your approach changed from what you initially proposed, if applicable?
+
+> The next step in our analysis will be to apply regression modeling to a majority proportion of the historical data. We will be seeking to determine a best line of fit over the data based on selective application of the variables described earlier. Having chosen the optimal arrangement of our variables, we will test the predictive strength of this model on the remaining portion of our data. This will serve as a secondary check and ensure a minimal amount of model predictions are false positives or negatives. Once this testing phase has validated our model, we can confidently plan to apply the model to future bike observations for the upcoming 2018 season.
+
+> The biggest change to our approach for this business problem is that we have scaled back the scope of our objectives, realizing that partnering bike share use with the unpredictable aspects of weather poses a large and complex scope of work. There are a few questions from our original analysis proposal that will have to remain unanswered until additional phases of this project can occur.
