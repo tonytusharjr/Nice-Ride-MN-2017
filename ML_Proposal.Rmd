@@ -1,0 +1,59 @@
+---
+title: "Nice Ride Machine Learning Outline"
+author: '[Tony Tushar Jr](mailto:tonytusharjr@gmail.com)'
+date: '`r format(Sys.time(), "%B %d, %Y")`'
+output:
+  html_notebook:
+    fig_caption: yes
+    fig_height: 6
+    toc: yes
+    toc_depth: 4
+    toc_float: no
+  pdf_document:
+    toc: yes
+    toc_depth: '4'
+  html_document:
+    df_print: paged
+    toc: yes
+    toc_depth: '2'
+---
+
+## How do you frame your main question as a machine learning problem? 
+
+> The main question for this project is how does a given daily weather scenario affect the bike share use of casual and member riders? Framing this as a machine learning problem involves modeling the relationship between weather and bike riders via historical data in order to apply the modeling toward future weather scenarios of the next riding season.
+
+## Is it a supervised or unsupervised problem? If it is supervised, is it a regression or a classification?
+
+> We will begin under the premise that this problem is supervised and in the form of a regression. It is not likely to be an unsupervised problem as our data set is currently a static pipeline not providing a continual update of new infomration to learn from.
+
+## What are the main features (also called independent variables or predictors) that you'll use?
+
+> The independent variables are the four main daily weather averages: 
+
+> + Temperature
++ Wind Speed
++ Precipitation
++ Humidity
+
+> Additionally there are other independent variables to consider:
+
+> + Fog
++ Thunder
++ Hail
+
+> There is likely to be multicollinearity between our independent variables, statistical tests can help assess this as the severity of interdependency amongst independent variables can diminish modeling ability.
+
+> This is a question that requires additional input...while the time domain of our data set and problem is on a total daily ride count level - we are not working in a time domain of hourly or by the minute - there may or may not be a use for the geospatial variables in the data. Ideally, the density of the geospatial variables would be summarized daily as well and not only would the modeling predict x number of rides for the day but it might also predict a pattern or ranking of ride density for every starting bike station. Will need input on how this might be achieved. This would be a helpful feature in order apply the solution of the problem toward maintenance tasks and other operational objectives for Nice Ride MN.
+
+## Which machine learning technique will you use?
+
+> We will consider several independent weather variables following the linear form of a bike season and use the variables to estimate total daily bike use of casual and member riders. The model will fit the form of a linear regression, but perhaps a clustering component will also be required if the predicted daily bike volume is to ranked by bike station starting points.
+
+## How will you evaluate the success of your machine learning technique? What metric will you use?
+
+> 60-75% of the data set, either the 2016 & 2017 seasons together or separately, will be utilized for training the model and the remaining percentage will be used to test the model. We will utilize a confusion matrix for examining the false positives and negatives in the testing phase. There are several different R packages that offer this ability, which one we utilize is TBD.
+
+## Additional things to consider:
+
+> + Will need to determine how to perform a predictive component of bike station density.
+> + Will need to settle on R packages for modeling and validating, updating this ML outline accordingly.
