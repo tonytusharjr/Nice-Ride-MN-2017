@@ -1,0 +1,363 @@
+---
+title: "Nice Ride Machine Learning Application: Clustering and Regressions"
+author: '[Tony Tushar Jr](mailto:tonytusharjr@gmail.com)'
+date: '`r format(Sys.time(), "%B %d, %Y")`'
+output:
+  html_notebook:
+    fig_caption: yes
+    fig_height: 6
+    toc: yes
+    toc_depth: 4
+    toc_float: no
+  pdf_document:
+    toc: yes
+    toc_depth: '4'
+  html_document:
+    df_print: paged
+    toc: yes
+    toc_depth: '2'
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r include=FALSE}
+library(tidyverse)
+library(geosphere)
+library(readr)
+library(ggmap)
+library(sp)
+library(rgdal)
+library(dismo)
+library(rgeos)
+library(randomForest)
+```
+
+Maybe Packages:
+library(car)
+library(sandwich)
+library(rpart)
+library(DMwR)
+library(nlme)
+
+### Load Data
+```{r include=FALSE}
+NiceRide <- read_csv("NiceRide1617_Out.csv")
+head(NiceRide)
+```
+
+### Geospatial exploration - Observe the busiest starting stations for Minneapolis-St.Paul in order to estimate k number of clusters for linear regression
+
+```{r include=FALSE, results='hide'}
+#Load map
+Map_TwinCities <- get_map(c(lon = -93.25576, lat = 44.97394), zoom = 11, maptype = "roadmap", source = "google")
+
+#Set map data subset of Rides
+Geo_Rides <- NiceRide %>% group_by(Start_Longitude, Start_Latitude) %>% count(Start_Station) %>% arrange(desc(n))
+
+attach(Geo_Rides)
+```
+
+### Observe bike stations by number of trips for the season
+```{r echo=FALSE}
+ggmap::ggmap(Map_TwinCities) + geom_point(aes(x = Start_Longitude, y = Start_Latitude, size = n), data = Geo_Rides, alpha = .25, color = "blue")
+```
+> Reviewing the density of bike station use on the city map it is clear that the majority of activity occurs in Minneapolis while most activity occurs in St. Paul along the most popular residential streets and downtown. We estimate the optimal clustering somewhere between 6-10 clusters.  
+
+### Calculate distance data frame from start station coordinates for clustering
+> Utilizing the geocoordinates for each bike station we can calculate a piecewise vector for the distance between every possible combination of bike stations. We determine a possible number of clusters from this output by applying the mean distance between station combinations as our cutoff point.
+
+```{r include=FALSE}
+# convert data to a SpatialPointsDataFrame object
+x <- Geo_Rides$Start_Longitude
+y <- Geo_Rides$Start_Latitude
+
+xy <- SpatialPointsDataFrame(
+      matrix(c(x,y), ncol=2), data.frame(ID=seq(1:length(x))),
+      proj4string=CRS("+proj=longlat +ellps=WGS84 +datum=WGS84"))
+
+# use the distm function to generate a geodesic distance matrix in meters
+mdist <- geosphere::distm(xy)
+
+# cluster all points using a hierarchical clustering approach
+hc <- hclust(as.dist(mdist), method="complete")
+
+# Convert mdist matrix to vector for mean geodesic distance, required input for d below
+mdist.vec <- as.vector(mdist)
+summary(mdist.vec)
+
+# define the distance threshold
+d=(mean(mdist.vec))
+
+# define clusters based on a tree "height" cutoff "d" and add them to the SpDataFrame
+xy$clust <- cutree(hc, h=d)
+
+StationClusters <- as.data.frame(xy)
+```
+
+## Plot Clustering output
+```{r echo=FALSE}
+# expand the extent of plotting frame
+xy@bbox[] <- as.matrix(extend(extent(xy),0.001))
+
+# get the centroid coords for each cluster
+cent <- matrix(ncol=2, nrow=max(xy$clust))
+for (i in 1:max(xy$clust))
+    # gCentroid from the rgeos package
+    cent[i,] <- gCentroid(subset(xy, clust == i))@coords
+
+# compute circles around the centroid coords using a 4055.54688m radius
+# from the dismo package
+ci <- circles(cent, d=d, lonlat=T)
+
+# plot
+plot(ci@polygons, axes=T)
+plot(xy, col=rainbow(8)[factor(xy$clust)], add=T)
+```
+> Clustering the stations based on the mean distance between stations resulted in eight clusters. Let's view the clustering on the same city map as before:
+
+## View clusters on Twin Cities map
+```{r echo=FALSE}
+ggmap::ggmap(Map_TwinCities) + geom_point(aes(x = coords.x1, y = coords.x2, colour = factor(clust)), data = StationClusters, alpha = .3, size = 4)
+```
+> We will use the cluster station ID's for joining the clustering to our original dataset. Prior modeling, we estimate that our modeling outcome will have stronger predictive strength for the clusters with greater station density. This will be a limitation to our application of linear regression, we note this limitation for future research in that a different modeling application might provide a better outcome.
+
+### Join cluster IDs to Nice Ride dataset
+```{r include=FALSE}
+# Drop ID variable in StationClusters dataframe
+StationClusters <- StationClusters %>% dplyr::select(-1)
+
+NiceRide.Clusters <- left_join(NiceRide,StationClusters, by = c("Start_Longitude" = "coords.x1", "Start_Latitude" = "coords.x2"))
+
+# Left join created duplicate observations, run distinct on dataframe
+NiceRide.Clusters <- distinct(NiceRide.Clusters)
+```
+
+### Reorder NiceRide.Clusters dataframe for group_by cluster no.
+```{r include=FALSE}
+NiceRide.Clusters <- NiceRide.Clusters %>% dplyr::select(31, 1:30)
+
+NiceRide.Clusters <- NiceRide.Clusters %>% group_by(clust) %>% arrange(clust)
+```
+
+### Cleanup environment
+```{r include=FALSE}
+rm(list=setdiff(ls(),c("NiceRide", "NiceRide.Clusters", "StationClusters")))
+```
+
+### Daily ride counts
+> Add a column for count(n) per day by account type - member or casual. This is our dependent variable for modeling. We will clean up the data set prior modeling by dropping all variables except for clustering, data/time, account type, daily weather averages, and daily counts.
+
+```{r echo=FALSE}
+NiceRide.Counts <- NiceRide.Clusters %>% count(clust, Start_DoWeek, Start_Year, Start_Month, Start_Day, Account_Type, Avg_Temp, Avg_Wind, Precip, Rel_Humidity) 
+
+NiceRide.Counts[is.na(NiceRide.Counts)] <- 0
+
+# Arrange
+NiceRide.Counts <- NiceRide.Counts %>% arrange(Start_Year, Start_Month, Start_Day)
+head(NiceRide.Counts)
+```
+
+### Check dataset structure prior clustering subsets
+> This step ensures factor variables are correct.
+
+```{r include=FALSE}
+NiceRide.Counts$Start_DoWeek <- as.factor(NiceRide.Counts$Start_DoWeek)
+NiceRide.Counts$Account_Type <- as.factor(NiceRide.Counts$Account_Type)
+NiceRide.Counts$clust <- as.factor(NiceRide.Counts$clust)
+str(NiceRide.Counts)
+```
+**Taking a different approach: Random Forests**
+
+### What are we doing running through the forest???
+> We will run a random forest model on 80% of the NiceRide.Counts data
+
+```{r echo=FALSE}
+# Training sample with 80% of observations(5,437)
+attach(NiceRide.Counts)
+set.seed(1234)
+train = sample(1:nrow(NiceRide.Counts), 5437)
+
+# Random Forest model
+NiceRide.rf <- randomForest(n ~ ., data = NiceRide.Counts, subset = train, importance = TRUE)
+NiceRide.rf
+```
+> A Random Forest model results in a mean squared error of 2,883 and 92.2% of the variance explained. Plotting the model shows the level of error in relation to the number of trees:
+
+### Random Forest error vs trees plot
+```{r echo=FALSE}
+plot(NiceRide.rf)
+```
+> We can also plot the variables to rank their importance in model accuracy:
+
+### Plot predictor variable rankings for model accuracy and node purity of decision trees
+```{r}
+varImpPlot(NiceRide.rf)
+```
+
+### Comparing the Out of Bag Sample Errors and Test set Errors
+```{r}
+oob.err = double(10)
+test.err = double(10)
+
+#mtry is no of Variables randomly chosen at each split
+for(mtry in 1:10)
+{
+  rf=randomForest(n ~ . , data = NiceRide.Counts , subset = train, mtry = mtry, ntree = 400) 
+  oob.err[mtry] = rf$mse[400] #Error of all Trees fitted
+  
+  pred <- predict(rf,NiceRide.Counts[-train,]) #Predictions on Test Set for each Tree
+  test.err[mtry]= with(NiceRide.Counts[-train,], mean( (n - pred)^2)) #Mean Squared Test Error
+  
+  cat(mtry," ") #printing the output to the console
+}
+```
+
+### Test errors
+```{r}
+test.err
+```
+
+### Out of Bag errors
+```{r}
+oob.err
+```
+
+### Plot OoB and Test errors
+```{r}
+matplot(1:mtry , cbind(oob.err,test.err), pch=19 , col=c("red","blue"),type="b",ylab="Mean Squared Error",xlab="Number of Predictors Considered at each Split")
+legend("topright",legend=c("Out of Bag Error","Test Error"),pch=19, col=c("red","blue"))
+```
+
+### Plot prediction
+```{r}
+NiceRide.rfpredict <- predict(NiceRide.rf, data = NiceRide.Counts[-train,])
+plot(NiceRide.rfpredict)
+```
+
+
+
+**Origianl lm approach below**
+### Subset all clusters
+> For efficiency, this step divides the modeling data frame into separate sets based on the cluster variable.
+
+```{r include=FALSE}
+ for(i in unique(NiceRide.Counts$clust)) {
+        name <- paste("NiceRide.Counts", i, sep = ".")
+        assign(name, NiceRide.Counts[NiceRide.Counts$clust==i,])
+ }
+
+rm(i)
+rm(name)
+```
+
+## Remove unnecessary variables for modeling
+```{r include=FALSE}
+NiceRide.Counts.1 <- NiceRide.Counts.1 %>% dplyr::ungroup() %>% dplyr::select(11, 2:10, -1)
+NiceRide.Counts.2 <- NiceRide.Counts.2 %>% dplyr::ungroup() %>% dplyr::select(11, 2:10, -1)
+NiceRide.Counts.3 <- NiceRide.Counts.3 %>% dplyr::ungroup() %>% dplyr::select(11, 2:10, -1)
+NiceRide.Counts.4 <- NiceRide.Counts.4 %>% dplyr::ungroup() %>% dplyr::select(11, 2:10, -1)
+NiceRide.Counts.5 <- NiceRide.Counts.5 %>% dplyr::ungroup() %>% dplyr::select(11, 2:10, -1)
+NiceRide.Counts.6 <- NiceRide.Counts.6 %>% dplyr::ungroup() %>% dplyr::select(11, 2:10, -1)
+NiceRide.Counts.7 <- NiceRide.Counts.7 %>% dplyr::ungroup() %>% dplyr::select(11, 2:10, -1)
+NiceRide.Counts.8 <- NiceRide.Counts.8 %>% dplyr::ungroup() %>% dplyr::select(11, 2:10, -1)
+```
+
+## Split datasetss into training and testing
+```{r}
+# set seed for reproduciblity
+set.seed(1234)
+
+# Create list
+split.list <- list(NiceRide.Counts.1, NiceRide.Counts.2, NiceRide.Counts.3, NiceRide.Counts.4, NiceRide.Counts.5, NiceRide.Counts.6, NiceRide.Counts.7, NiceRide.Counts.8)
+
+# list of lists, each containing a train and test set with *exactly* 80/20 split
+get.TT <- function(df) setNames(split(df, (1:nrow(df)) %in% sample(nrow(df),0.2*nrow(df))),
+                                c("train","test"))
+TT.list  <- lapply(split.list, get.TT)
+sapply(TT.list, function(ll) sapply(ll, nrow))
+```
+
+## Run Linear Regressions / 3 different models
+```{r}
+# Make lm function without modifying any variables
+lm.func.1 <- function(data){  
+  lm(n ~ ., data = data)}
+
+# Make lm function modifying n to log(n)
+lm.func.2 <- function(data){  
+  lm(log(n) ~ Start_DoWeek + Start_Year + Start_Month + Start_Day + Account_Type + Avg_Temp + Avg_Wind + Precip + Rel_Humidity, data = data)}
+
+# Make lm function modifying n to log(n) and weather variables to ^2
+lm.func.3 <- function(data){  
+  lm(log(n) ~ Start_DoWeek + Start_Year + Start_Month + Start_Day + Account_Type + Avg_Temp + I(Avg_Temp^2) + Avg_Wind + I(Avg_Wind^2) + Precip + I(Precip^2) + Rel_Humidity + I(Rel_Humidity^2), data = data)}
+
+# Loop over datasets with lm function
+models.1 <- lapply(TT.list, function(x) lm.func.1(x$train))
+models.2 <- lapply(TT.list, function(x) lm.func.2(x$train))
+models.3 <- lapply(TT.list, function(x) lm.func.3(x$train))
+```
+
+## Summary and Anova for models.1
+```{r}
+lapply(models.1, summary)
+lapply(models.1, AIC)
+```
+
+## Plots for models.1
+```{r}
+lapply(models.1, plot)
+```
+
+## Summary and Anova for models.2
+```{r}
+lapply(models.2, summary)
+lapply(models.2, AIC)
+```
+
+## Plots for models.2
+```{r}
+lapply(models.2, plot)
+```
+
+## Summary and Anova for models.3
+```{r}
+lapply(models.3, summary)
+lapply(models.3, AIC)
+```
+
+## Plots for models.3
+```{r}
+lapply(models.3, plot)
+```
+
+## Predict Linear Regressions for test data of model.3
+```{r}
+# Extract test datasetss from list
+NR.Test.1 <- as.data.frame(TT.list[[1]][2])
+NR.Test.2 <- as.data.frame(TT.list[[2]][2])
+NR.Test.3 <- as.data.frame(TT.list[[3]][2])
+NR.Test.4 <- as.data.frame(TT.list[[4]][2])
+NR.Test.5 <- as.data.frame(TT.list[[5]][2])
+NR.Test.6 <- as.data.frame(TT.list[[6]][2])
+NR.Test.7 <- as.data.frame(TT.list[[7]][2])
+NR.Test.8 <- as.data.frame(TT.list[[8]][2])
+
+# Extract train model datasetss from models.3
+NR.TrainM3.1 <- models.3[[1]][12]
+
+NR.Pred.3 <- function(data){  
+  predict.lm(NR.TrainM3.1, data = data)}
+
+# Run predict function over each set
+newData <- list(NR.Test.1)
+newData <- list(NR.Test.1, NR.Test.2, NR.Test.3, NR.Test.4, NR.Test.5, NR.Test.6, NR.Test.7, NR.Test.8)
+
+preds3 <- lapply(newData, NR.Pred.3)
+```
+
+
+
+
+
+
+
