@@ -1,0 +1,705 @@
+---
+title: "Springboard Foundations of Data Science Capstone Project Final Report: Predicting Nice Ride MN Bikeshare Volume"
+author: '[Tony Tushar Jr](mailto:tonytusharjr@gmail.com)'
+date: '`r format(Sys.time(), "%B %d, %Y")`'
+output:
+  pdf_document:
+    toc: yes
+    toc_depth: '3'
+  html_notebook:
+    fig_caption: yes
+    fig_height: 6
+    toc: yes
+    toc_depth: 4
+    toc_float: no
+  html_document:
+    df_print: paged
+    toc: yes
+    toc_depth: '2'
+editor_options: 
+  chunk_output_type: inline
+---
+# Executive Summary
+
+This project analyzes the Nice Ride MN bike share program 2016-2017 seasons alongside historical daily weather data in order to predict daily ridership. The primary solution this analysis aims to provide - a reliable estimation of daily bikeshare use based on historical behavior and correlations to weather - can apply to the frequent problem of when to redistribute bikes to various docking stations and/or determine maintenance strategies based on user behavior. Addressing these issues can lead to greater operational efficiency, lower costs, and higher revenue for Nice Ride MN.
+
+Questions covered in the analysis:
+
+* How does weather - temperature, precipitation, humidity,  and wind speed - affect bike use?
+* What are the busiest docking stations and how is this represented from a geospatial perspective?
+* How does bike use vary between weekdays and weekends?
+* How does use behavior differ between members and nonmembers? Behavioral use questions to include mean, median, mode, and range for ride length, ride distance, and day of the week.
+
+
+Potential business applications for this research:
+
+* Optimization model for maintaining bike stock at docking stations based on demand forecasting
+* Predictive model for volume of bike use based on a combination of weather variables
+* Exploration of shifting from flat rate pricing structure to dynamic pricing for revenue optimization
+* Predictive model for best future locations of bike docking stations
+
+The project analysis occurs in three stages: (1) data wrangling, (2) exploratory/statistical data analysis, and (3) predictive modeling. Findings from this analysis include: 
+
+* Riders with membership subscriptions comprise the majority of daily use, tend to utilize the bikeshare during work commute hours, and have a higher tolerance for unfavorable weather conditions.
+* Bikeshare volume density is greatest in downtown Minneapolis and less utilized in St. Paul.
+* Bike ride volume is comparable between the two seasons analyzed, however outside factors (road construction) might have contributed to minor difference between the seasons.
+* Daily average temperature plays the largest influence on bike use, followed by humidity, precipitation, and wind speed.
+
+# Background
+
+Nice Ride MN was formed in 2008 from a city of Minneapolis initiative - Twin Cities Bike Share Project. The initiative reviewed other municipal bike share programs and settled upon a non-profit structure that utilizes both public and private funding. Bike rides began in 2010 with over 100,000 rides on 700 bikes across 65 stations. Since 2015 the system has included over 1700 bikes and 190 stations with annual rides over 450,000. Source: [Nice Ride MN - About](www.niceridemn.org/about/)
+
+Dockless stations are a growing trend in bike share programs across the world, but they present a new set of challenges known as "bike pollution". Dockless stations address the operational inefficiency of bike rebalancing, however they can lead to disrupting other environmental aspects of city life when users do not adhere to dockless rules. The objectives of this research have been asked by others and more of this type of research might lead to increasing the efficiencies of bike stations or assist in determing solutions for the issues arising from dockless programs.
+
+# Data Wrangling
+
+## Datasets and Descriptions
+
+Nice Ride MN provides annual datasets for all bike rental activity and dock station characteristics. [Nice Ride MN](niceridemn.egnyte.com/dl/QrR5Ih5Xeq)
+
+### Ride Activity Data Preview - Nice_Ride_trip_history_2017_season.csv
+|Variable|Description|
+|--------------------------------|--------------------------------|
+|Start date|Date and time the rental began
+|Start station|Descriptive name for the station where the rental began, changes if station is moved
+|Start terminal|Logical name for the station/terminal where the rental began, does not change when station is moved
+|End date|Date and time the rental ended
+|End station|Descriptive name for the station where the rental ended
+|End terminal|Logical name for the station/terminal where the rental ended
+|Total duration|Total length of the rental, in seconds
+|Account type|Values are Member or Casual, Members are users who have an account with Nice Ride, Casuals are walk up users who purchased a pass at the station based on half hour increments
+ 
+### Station Location Characteristics - Nice_Ride_2017_station_locations.csv
+|Variable|Description|
+|--------------------------------|--------------------------------|
+|Terminal|Logical name of station - matches Start terminal / End terminal in trip history
+|Station|Station name used on maps, xml feed and station poster frame - matches Start station / End station  in trip history
+|Latitude|Station location decimal latitude
+|Longitude|Station location decimal longitude
+|Nb Docks|Total number of bike docking points at station - indicates station size
+
+Local climatological data are available from the National Centers for Environmental
+Information's Integrated Surface Data (ISD) dataset. [NOAA Weather Data Library](https://www.ncdc.noaa.gov/cdo-web/datasets#LCD)
+
+### 2017 Local Climatological Data, Daily Averages
+|Variable|Desecription
+|--------------------------------|--------------------------------|
+|Station|Station identification number
+|Station name|Name of station
+|Elevation|Station elevation
+|Latitude|Latitude of station
+|Longitude|Longitude of station
+|Date|Date of recorded observations
+|Report type|Reporting method characteristics
+|Average daily dry bulb temp F|Dry bulb measured temperature in degrees Fahrenheit
+|Average daily relative humidity|Humidity level
+|Average daily wind speed|Wind speed in miles per hour
+|Average daily precipitation|Precipitation in inches
+
+## Key Identifications
+
+*Dataset Strengths*
+By joining the three datasets described above, a rich dataset offers the opportunity to understand public bike share behavior for two differing price structures - memberships and casual rides. Exploration of the data shows differing use behavior for casual and member customers based on day of the week, time of day and responses to weather scenarios. Analyzing bike use behavior and correlations to weather scenarios allows for insights related to optimal maintenance scheduling and any potential price restructuring for strategies related to revenue and growth.
+
+*Dataset Limitations/Caveats*
+Limitations of the dataset include the effects of historical city construction projects. The data include two bike seasons, 2016-2017, and span a duration from early April to early November. During exploratory data analysis a trend of greater biking volume was noticed for 2017 in comparison to 2016. Based on research and potentially backed by domain knowledge, there was a greater volume of city construction projects in 2016 compared to 2017, this might be an uncontrollable variable in the analysis.
+
+There are over 800,000 bike ride observations in this dataset. Through this analysis outliers were uncovered for roughly 1500 observations for the trip duration variables. They represent less than one percent of the total observations and were removed prior conducting statistical tests.
+
+## Data Preparation Summary
+
+The Nice Ride MN bikeshare datasets required little data wrangling other than renaming a few columns based on preference, formatting the date and time columns to match with the weather data, and a full join to match the dock station data with the trip history data. Joining bikeshare volume with daily weather averages provided to be a more challenging task. Initially the data was formatted based on hourly weather and riding observations, however, the hourly weather data provided multiple observations per hour causing excessive noise. It was decided that a more reliable and consistent dataset could be created using daily weather averages for joining with ride observations. 
+
+# Exploratory/Statistical Data Analysis (EDA)
+
+## Load Packages, Load Data
+```{r setup, include=FALSE}
+rm(list = ls())
+
+library(tidyverse)
+library(readr)
+library(ggthemes)
+library(lubridate)
+library(weathermetrics)
+library(geosphere)
+library(ggmap)
+library(sp)
+library(rgdal)
+library(dismo)
+library(rgeos)
+library(caret)
+```
+
+```{r loading data, message=FALSE, include=FALSE}
+Rides1617 <- read_csv("Nice_Ride_1617.csv")
+theme_set(theme_tufte())
+```
+
+```{r multi plot, include=FALSE}
+# Multiple plot function
+#
+# ggplot objects can be passed in ..., or to plotlist (as a list of ggplot objects)
+# - cols:   Number of columns in layout
+# - layout: A matrix specifying the layout. If present, 'cols' is ignored.
+#
+# If the layout is something like matrix(c(1,2,3,3), nrow=2, byrow=TRUE),
+# then plot 1 will go in the upper left, 2 will go in the upper right, and
+# 3 will go all the way across the bottom.
+#
+multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
+  library(grid)
+
+  # Make a list from the ... arguments and plotlist
+  plots <- c(list(...), plotlist)
+
+  numPlots = length(plots)
+
+  # If layout is NULL, then use 'cols' to determine layout
+  if (is.null(layout)) {
+    # Make the panel
+    # ncol: Number of columns of plots
+    # nrow: Number of rows needed, calculated from # of cols
+    layout <- matrix(seq(1, cols * ceiling(numPlots/cols)),
+                    ncol = cols, nrow = ceiling(numPlots/cols))
+  }
+
+ if (numPlots==1) {
+    print(plots[[1]])
+
+  } else {
+    # Set up the page
+    grid.newpage()
+    pushViewport(viewport(layout = grid.layout(nrow(layout), ncol(layout))))
+
+    # Make each plot, in the correct location
+    for (i in 1:numPlots) {
+      # Get the i,j matrix positions of the regions that contain this subplot
+      matchidx <- as.data.frame(which(layout == i, arr.ind = TRUE))
+
+      print(plots[[i]], vp = viewport(layout.pos.row = matchidx$row,
+                                      layout.pos.col = matchidx$col))
+    }
+  }
+}
+```
+
+```{r view main dataset}
+head(Rides1617)
+```
+
+## 1. General exploration of dataset:
+
+### Distribution of trips by month, for 2016-2017 seasons
+```{r echo=FALSE}
+#Create data subset
+Trips_Month <- Rides1617 %>% count(Start_Year, Start_Month) %>% mutate(Percent_Year = prop.table(n))
+head(Trips_Month)
+
+#Setup plot properties for possible reuse
+gg_prop_Month <- ggplot(data = data.frame(), aes(x = Start_Month, y = Percent_Year, fill = factor(Start_Year))) + 
+  geom_bar(stat = 'identity', position = 'dodge', alpha = 2/3) + labs(x = "Start Month", y = "Percentage", title="Trip Distribution by Month, 2016-2017", fill="Year")
+
+#Plot data
+gg_prop_Month %+% Trips_Month 
+```
+Trip distrubution shows greatest variance year-over-year during the summer months. It is possible road construction played a larger role in 2016 than 2017, impacting ride volume negatively. However, it is difficult to control for road construction from one year to the next, this is simply a hypothesis to note but not investigate in the scope of this project.
+
+### Distribution of trips per day of the week, by account type
+```{r echo=FALSE}
+#Reorder days of the week
+Rides1617$Start_DoWeek <- ordered(Rides1617$Start_DoWeek, levels=c("Sun", "Mon", "Tue", "Wed", "Thu", 
+"Fri", "Sat"))
+
+#Create data subset
+Trips_Week <- Rides1617 %>% count(Start_Year, Start_DoWeek, Account_Type) %>% mutate(Percent_Year = prop.table(n))
+head(Trips_Week)
+
+#Setup plot properties for possible reuse
+gg_prop_Week <- ggplot(data = data.frame(), aes(x = Start_DoWeek, y = Percent_Year, fill = factor(Account_Type))) + 
+  geom_bar(stat = 'identity', position = 'dodge', alpha = 2/3) + facet_grid(Start_Year ~ .) + labs(x = "Day of the Week", y = "Percentage", title="Trip Distribution by Day and Account Type, 2016-2017", fill="Account Type")
+
+#Plot data
+gg_prop_Week %+% Trips_Week 
+```
+Daily distribution by year confirms consistency year-over-year, member riders are utilizing bikshare for commuting purposes while casual riders utilize bikeshare for leisure, inverse of one another. An hourly breakdown of bike volume would further detail this observation, however, this is not relevant to the greater scope of our project purpose.
+
+### Distibution of trips per year by account type
+```{r echo=FALSE}
+#Create data subset
+Trips_Account <- Rides1617 %>% count(Start_Year, Start_Month, Start_Day, Weekend, Account_Type) 
+Trips_Account16 <- Trips_Account %>% mutate(Dates = as.Date(paste(Start_Year, Start_Month, Start_Day, sep='-'))) %>% filter(Start_Year==2016) 
+Trips_Account17 <- Trips_Account %>% mutate(Dates = as.Date(paste(Start_Year, Start_Month, Start_Day, sep='-'))) %>% filter(Start_Year==2017) 
+
+#Setup plot properties for possible reuse
+gg_prop_Account16 <- ggplot(data = data.frame(), aes(x = Dates, y = n, color=factor(Account_Type))) + 
+  geom_point(size=3, alpha = 2/3) + geom_jitter() + labs(x = "Date", y = "Total Rides", title="Trip Distribution by Month", subtitle="2016", color="Account Type")
+
+gg_prop_Account17 <- ggplot(data = data.frame(), aes(x = Dates, y = n, color=factor(Account_Type))) + 
+  geom_point(size=3, alpha = 2/3) + geom_jitter() + labs(x = "Date", y = "Total Rides", title="Trip Distribution by Month", subtitle="2017", color="Account Type")
+
+#Plot data
+multiplot(gg_prop_Account16 %+% Trips_Account16, gg_prop_Account17 %+% Trips_Account17)
+```
+Member rides dominant casual year-over-year. Both bike seasons demonstrate a convex shape visually, ride volume peaks in the summer months. It is worth noting that 2017 demonstrates more frequent peak volume points for casual riders above members, perhaps these max points are related to holidays or city-wide events. 
+
+### Summary of trip distance
+```{r echo=FALSE}
+summary(Rides1617$Trip_DistanceMiles)
+```
+Median trip distance is 1.944 miles while the max is 29 miles, is this logical in comparison to trip duration?
+
+### Summary of trip duration in minutes
+```{r echo=FALSE}
+summary(Rides1617$Total_DurationMin)  
+```
+It is odd to see a max ride observation of over 280,000 minutes, this equates to 194 days! How many bike rides are greater than one day? This is the process by which we can determine outliers as previously mentioned.
+
+```{r}
+# What percentage of bike rides are over one day in length?
+# Trips equal to or less than one day
+Rides_Day <- Rides1617 %>% mutate(Total_DurationDay = (Total_DurationMin <= 24*60))
+
+Day_Length <- nrow(Rides_Day)
+
+sum(Rides_Day$Total_DurationDay/Day_Length)
+```
+There are 1,498 observations in which ride duration is greater than one day, this accounts for less than 0.02% of our dataset. As our intended outcome of this study is to create a predictive model for daily trips as related to daily weather, we consider these observations as outliers and remove them.
+
+```{r echo=FALSE}
+Rides1617_Mod <- Rides1617 %>% filter(Total_DurationMin<=24*60)
+```
+
+```{r eval=FALSE, include=FALSE}
+setwd("~/Nice Ride MN 2017/Nice-Ride-MN-2017")
+NiceRide1617_Out <- Rides1617_Mod
+write_csv(NiceRide1617_Out, "NiceRide1617_Out.csv")
+```
+
+## 2. Correlation testing for the effects of primary weather variables on bikeshare volume:
+
+### Effect of average temperature
+```{r echo=FALSE}
+# Data subset
+Temp <- Rides1617_Mod %>% dplyr::select(Start_Year:Start_Day, Account_Type, Avg_Temp) %>% group_by(Start_Year, Start_Month, Start_Day, Account_Type, Avg_Temp) %>% tally()  
+
+#Correlation test between daily average temperature and bike count
+Cor_Temp <- cor.test(x = Temp$Avg_Temp, y = Temp$n)
+
+Cor_Temp
+```
+
+```{r echo=FALSE}
+plot_cor_temp <- ggplot(Temp, aes(Avg_Temp, n))
+plot_cor_temp + geom_point() + geom_smooth(method="lm") + labs(x = "Avg Temp (F)", y = "Bike Count", title = "Average Daily Temperature and Bike Count", subtitle = "2016-2017 Seasons")
+```
+Null hypothesis: there is no correlation between average daily temperature and bike volume. We reject the null hypothesis based on the statistical significance of a p value less than 0.05 and a correlation coefficient of 0.47. Heteroskedasticity is also visible from this plot, the variance in bike counts increases as temperature increases. This will have to be reconsidered when in the modeling phase of the analysis.
+
+### Effect of average wind speed
+```{r echo=FALSE}
+# Data subset
+Wind <- Rides1617_Mod %>% dplyr::select(Start_Year:Start_Day, Account_Type, Avg_Wind) %>% group_by(Start_Year, Start_Month, Start_Day, Account_Type, Avg_Wind) %>% tally()  
+
+#Correlation test between daily average wind speed and bike count
+Cor_Wind <- cor.test(x = Wind$Avg_Wind, y = Wind$n)
+
+Cor_Wind
+```
+
+```{r echo=FALSE}
+plot_cor_wind <- ggplot(Wind, aes(Avg_Wind, n))
+plot_cor_wind + geom_point() + geom_smooth(method="lm") + labs(x = "Avg Wind (Mph)", y = "Bike Count", title = "Average Daily Wind Speed and Bike Count", subtitle="2016-2017 Seasons")
+```
+Null hypothesis: there is no correlation of average daily wind to daily bike count. We reject the null hypothesis based on the statistical significance of a p value less than 0.05 and a correlation coefficient of -0.21.
+
+### Effect of precipitation
+```{r echo=FALSE}
+# Data subset
+Precip <- Rides1617_Mod %>% dplyr::select(Start_Year:Start_Day, Account_Type, Precip) %>% group_by(Start_Year, Start_Month, Start_Day, Account_Type, Precip) %>% tally()  
+
+#Correlation test between daily precipitation and bike count
+Cor_Precip <- cor.test(x = Precip$Precip, y = Precip$n)
+
+Cor_Precip
+```
+
+```{r echo=FALSE}
+plot_cor_precip <- ggplot(Precip, aes(Precip, n))
+plot_cor_precip + geom_point() + geom_smooth(method="lm") + labs(x = "Precipitation (Inches)", y = "Bike Count", title = "Daily Precipitation and Bike Count", subtitle="2016-2017 Seasons")
+```
+Null hypothesis: There is no correlation between precipitation and bike volume. We reject the null hypothesis based on the statistical significance of a p value less than 0.05 and an inverse correlation coefficient of -0.20.
+
+### Effect of relative humidity
+```{r echo=FALSE}
+# Data subset
+Humidity <- Rides1617_Mod %>% dplyr::select(Start_Year:Start_Day, Account_Type, Rel_Humidity) %>% group_by(Start_Year, Start_Month, Start_Day, Account_Type, Rel_Humidity) %>% tally()  
+
+#Correlation test between daily precipitation and bike count
+Cor_Humidity <- cor.test(x = Humidity$Rel_Humidity, y = Humidity$n)
+
+Cor_Humidity
+```
+
+```{r echo=FALSE}
+plot_cor_humidity <- ggplot(Humidity, aes(Rel_Humidity, n))
+plot_cor_humidity + geom_point() + geom_smooth(method="lm") + labs(x = "Relative Humidity", y = "Bike Count", title = "Daily Relative Humidity and Bike Count", subtitle="2016-2017 Seasons")
+```
+Null hypothesis: There is no correlation between relative humidity and bike volume. We reject the null hypothesis based on the statistical significance of a p value less than 0.05 and an inverse correlation coefficient of -0.29.
+
+## 3. Welch Two Sample t-tests for measuring variances in average general biking characteristics and primary weather variables for member and casual bike account types:
+```{r echo=FALSE}
+#Data subset
+Account_Tests <- Rides1617_Mod %>% dplyr::select(Account_Type, Avg_Temp, Avg_Wind, Precip, Rel_Humidity, Total_DurationMin, Trip_DistanceMiles)
+```
+
+### Trip duration
+```{r echo=FALSE}
+t.test(data=Account_Tests, Total_DurationMin~Account_Type)
+```
+Null hypothesis (H0): There is no difference in the mean trip duration of member and casual account types. Alternative hypothesis (H1): There is a difference in the mean trip duration of member and casual account types. In this case, we reject the null hypothesis as the probability of there being no difference in mean trip duration for account types is very, very small. *On average, casual bike riders favor bike trips longer than members.* 
+
+### Trip distance
+```{r echo=FALSE}
+t.test(data=Account_Tests, Trip_DistanceMiles~Account_Type)
+```
+Null hypothesis (H0): There is no difference in the mean trip distance of member and casual account types. Alternative hypothesis (H1): There is a difference in the mean trip distance of member and casual account types. In this case, we reject the null hypothesis as the probability of there being no difference in mean trip distance for account types is very, very small. *On average, casual bike riders favor a slightly longer riding distance.* 
+
+### Temperature
+```{r echo=FALSE}
+t.test(data=Account_Tests, Avg_Temp~Account_Type)
+```
+Null hypothesis (H0): There is no difference in the mean temperature of member and casual account types. Alternative hypothesis (H1): There is a difference in the mean temperatures of member and casual account types. In this case, we reject the null hypothesis as the probability of there being no difference in mean temperature for account types is very, very small. *On average, casual bike riders favor a slightly warmer average temperature than member riders.*
+
+
+### Wind Speed
+```{r echo=FALSE}
+t.test(data=Account_Tests, Avg_Wind~Account_Type)
+```
+Null hypothesis (H0): There is no difference in the mean wind speed of member and casual account types. Alternative hypothesis (H1): There is a difference in the mean wind speed of member and casual account types. In this case, we reject the null hypothesis as the probability of there being no difference in mean riding distance for account types is very, very small. *On average, casual bike riders favor a slightly lower wind speed for riding compared to member riders.*
+
+## Precipitation
+```{r echo=FALSE}
+t.test(data=Account_Tests, Precip~Account_Type)
+```
+
+Null hypothesis (H0): There is no difference in the mean precipiation of member and casual account type rides. Alternative hypothesis (H1): There is a difference in the mean precipiation of member and casual account type rides. In this case, we reject the null hypothesis as the probability of there being no difference in mean precipitation for account types is very, very small. *On average, casual bike riders favor less precipitation while riding compared to member riders.*
+
+### Relative humidity
+```{r echo=FALSE}
+t.test(data=Account_Tests, Rel_Humidity~Account_Type)
+```
+Null hypothesis (H0): There is no difference in the mean relative humidity of member and casual account type rides. Alternative hypothesis (H1): There is a difference in the mean relative humidity of member and casual account type rides. In this case, we reject the null hypothesis as the probability of there being no difference in mean relative humidity for account types is very, very small. *On average, casual bike riders favor lower relative humidity while riding compared to member riders.*
+
+## 4. EDA Conclusion
+
+### Brief summary of findings:
+
+All t-tests resulted in rejecting the null hypothesis as there was little probabilty for a difference of zero between member and casual account type ride characteristics in relation to the average observations of trip distance, trip duration, and primary weather variables. Running t-tests to compare trip distance and duration between the two groups, we determined a high probabilty that casual rider trip duration is on average over twice as long as member trip duration. As for trip distance, we reject the null hypothesis that there is no difference in trip distance between account types. However this was our weakest p value for all t-tests conducted. While there is a difference in average trip distance by account type, the difference is minimal.
+
+**In comparison to casual riders, member riders appear more willing to handle average weather variables in the following manner:**
+
++ Lower temperatures
++ Higher wind speed
++ Higher precipitation
++ Higher relative humidty
+
+## Possible further exploration:
+
+We have not analyzed the secondary, binomial weather variables that detail various weather types as "yes" or "no" for a given ride observation. This study did include propability tests comparing the likelihood that weather types such as fog, heavy fog, thunder, hail, and haze; in which we found that probabilities for bike rides by members were higher for these weather conditions present than for casual riders. We will explore the impact of these categorical independent variables in greater detail when conducting regression analysis and weighting the variables for machine learning applications.
+
+# Predictive Modeling: Machine Learning Application
+
+### Modeling Strategies Considered:
+
+The main question for this project is how does a given daily weather scenario affect the bike share use of casual and member riders? Framing this as a machine learning problem involves modeling the relationship between weather and bike riders via historical data in order to apply the modeling toward future weather scenarios in the next riding season.
+
+We start the predictive modeling under the premise that this problem is supervised and in the form of a regression. Secondly, we consider hierarchial clustering as a preliminary step knowing that daily bike ride density varies throughout the system. It might be best to cluster stations based on the mean distance between all stations and run a regression for each cluster. Initial attempts of this approach are likely to yield poor results due to the previously observed heteroskedasticity of the weather variables in relation to daily counts. 
+
+A third approach is considered: random forests. Applying random forests to the total dataset while including the cluster group variable might provide the best outcome under the current scope of this project. Random forest models draw random samples from the data set with replacement and utilize a regression tree approach in place of the linear form. The model reaches an optimal regression tree based on te dominant outcome from the numerous random sampling. Utilizing the train function from the 'caret' package, the model chooses an optimal number of predictor variables in the dataset for each tree, resulting in the highest Rsquared predictive power while accounting for model overfit.
+
+### Main features (predictors) based on EDA results
+
+For the first process of clustering, the important predictors are geospatial data points - latitude and longitude, clusters of bike share stations related to a centroid point, based on the distance properties gleaned from the geospatial coordinates.
+
+For the secondary phase of random forests, in addition to the cluster variable, time variables along with the four main daily weather variables and ride account type are considered:
+
++ Year, Month, and Day
++ Day of the Week
++ Account Type
++ Temperature
++ Wind Speed
++ Precipitation
++ Humidity
+
+### Properties of Model Evaluation
+
+A random sampling of 80% of the data set is utilized for training the model and the remainder is used to test the model. Adjusted Rsquared and the Root Mean Squared Error (RMSE) will serve as measurements of the accuracy and efficiency of the random forest regression tree modeling. Maximizing Rsquared and minimizing the RMSE in proportion to the dependent variable mean will result in a reliable model for predicting daily bike volume. 
+
+### Modeling Caveat
+
+This phase of the analysis began with the intention to produce a model for each bike station cluster, however, due to time constraints and the reality that a model for the total dataset serves as a satisfactory process in itself, the clustering serves as a feature rather than modeling divergent.
+
+```{r include=FALSE}
+rm(list=ls())
+```
+
+### Load Modeling Data
+```{r include=FALSE}
+NiceRide <- read_csv("NiceRide1617_Out.csv")
+head(NiceRide)
+```
+
+### Geospatial Exploration
+Observe the busiest starting stations for Minneapolis-St.Paul in order to estimate k number of clusters for additional variable. 
+
+```{r include=FALSE, results='hide'}
+#Load map
+Map_TwinCities <- get_map(c(lon = -93.25576, lat = 44.97394), zoom = 11, maptype = "roadmap", source = "google")
+
+#Set map data subset of Rides
+Geo_Rides <- NiceRide %>% group_by(Start_Longitude, Start_Latitude) %>% count(Start_Station) %>% arrange(desc(n))
+
+attach(Geo_Rides)
+```
+
+```{r echo=FALSE}
+ggmap::ggmap(Map_TwinCities) + geom_point(aes(x = Start_Longitude, y = Start_Latitude, size = n), data = Geo_Rides, alpha = .25, color = "blue")
+```
+Reviewing the density of bike station use on the city map it is clear that the majority of activity occurs in Minneapolis while most activity occurs in St. Paul along the most popular residential streets and downtown. We estimate the optimal clustering somewhere between 6-10 clusters.  
+
+### Calculate distance data frame from start station coordinates for clustering and plot on same map
+Utilizing the geocoordinates for each bike station we can calculate a piecewise vector for the distance between every possible combination of bike stations. We determine a possible number of clusters from this output by applying the mean distance between station combinations as our cutoff point.
+
+```{r include=FALSE}
+# convert data to a SpatialPointsDataFrame object
+x <- Geo_Rides$Start_Longitude
+y <- Geo_Rides$Start_Latitude
+
+xy <- SpatialPointsDataFrame(
+      matrix(c(x,y), ncol=2), data.frame(ID=seq(1:length(x))),
+      proj4string=CRS("+proj=longlat +ellps=WGS84 +datum=WGS84"))
+
+# use the distm function to generate a geodesic distance matrix in meters
+mdist <- geosphere::distm(xy)
+
+# cluster all points using a hierarchical clustering approach
+hc <- hclust(as.dist(mdist), method="complete")
+
+# Convert mdist matrix to vector for mean geodesic distance, required input for d below
+mdist.vec <- as.vector(mdist)
+summary(mdist.vec)
+
+# define the distance threshold
+d=(mean(mdist.vec))
+
+# define clusters based on a tree "height" cutoff "d" and add them to the SpDataFrame
+xy$clust <- cutree(hc, h=d)
+
+StationClusters <- as.data.frame(xy)
+```
+
+```{r include=FALSE}
+# expand the extent of plotting frame
+xy@bbox[] <- as.matrix(extend(extent(xy),0.001))
+
+# get the centroid coords for each cluster
+cent <- matrix(ncol=2, nrow=max(xy$clust))
+for (i in 1:max(xy$clust))
+    # gCentroid from the rgeos package
+    cent[i,] <- gCentroid(subset(xy, clust == i))@coords
+
+# compute circles around the centroid coords using a 4055.54688m radius
+# from the dismo package
+ci <- circles(cent, d=d, lonlat=T)
+
+# plot
+plot(ci@polygons, axes=T)
+plot(xy, col=rainbow(8)[factor(xy$clust)], add=T)
+```
+
+```{r echo=FALSE}
+ggmap::ggmap(Map_TwinCities) + geom_point(aes(x = coords.x1, y = coords.x2, colour = factor(clust)), data = StationClusters, alpha = .3, size = 4)
+```
+Clustering the stations based on the mean distance between stations resulted in eight clusters. 
+
+We will use the cluster station ID's for joining the clustering to our original dataset. There is a possible argument that the cluster variable should not be included in the modeling. We argue for its inclusion based on the idea that clusters with greater daily bike count density carry higher weight in the modeling process. High density stations are more closely laid out in the city and are likely to be areas of greater concern in daily operations as they harbor the most use.
+
+```{r include=FALSE}
+# Drop ID variable in StationClusters dataframe
+StationClusters <- StationClusters %>% dplyr::select(-1)
+
+NiceRide.Clusters <- left_join(NiceRide,StationClusters, by = c("Start_Longitude" = "coords.x1", "Start_Latitude" = "coords.x2"))
+
+# Left join created duplicate observations, run distinct on dataframe
+NiceRide.Clusters <- distinct(NiceRide.Clusters)
+```
+
+```{r include=FALSE}
+NiceRide.Clusters <- NiceRide.Clusters %>% dplyr::select(31, 1:30)
+
+NiceRide.Clusters <- NiceRide.Clusters %>% group_by(clust) %>% arrange(clust)
+
+rm(list=setdiff(ls(),c("NiceRide.Clusters")))
+```
+
+### Daily ride counts
+Add a column for count(n) per day by account type - member or casual. This is our dependent variable for modeling. We will clean up the data set prior modeling by dropping all variables except for clustering, data/time, account type, daily weather averages, and daily counts.
+
+```{r echo=FALSE}
+NiceRide.Counts <- NiceRide.Clusters %>% count(clust, Start_DoWeek, Start_Year, Start_Month, Start_Day, Account_Type, Avg_Temp, Avg_Wind, Precip, Rel_Humidity) 
+
+NiceRide.Counts[is.na(NiceRide.Counts)] <- 0
+
+# Arrange
+NiceRide.Counts <- NiceRide.Counts %>% arrange(Start_Year, Start_Month, Start_Day)
+head(NiceRide.Counts)
+```
+
+### Check dataset structure prior modeling
+This step ensures factor variables are correct.
+
+```{r include=FALSE}
+NiceRide.Counts$Start_DoWeek <- as.factor(NiceRide.Counts$Start_DoWeek)
+NiceRide.Counts$Account_Type <- as.factor(NiceRide.Counts$Account_Type)
+NiceRide.Counts$clust <- as.factor(NiceRide.Counts$clust)
+str(NiceRide.Counts)
+
+rm(list=setdiff(ls(),c("NiceRide.Counts")))
+```
+
+### Random Forest Modeling
+We will run a random forest model on 80% of the NiceRide.Counts data and test for prediction accuracy with the remaining 20%:
+
+```{r echo=FALSE}
+# set train/test data
+set.seed(1234)
+train <- sample(1:nrow(NiceRide.Counts), 5437)
+
+NR.train <- NiceRide.Counts[train,]
+NR.test <- NiceRide.Counts[-train,]
+
+# determine mtry floor
+mtry_def <- floor(sqrt(ncol(NR.train))*.75) # How many columns to select in each bootstrap sample?
+t_grid <- expand.grid(mtry= c(mtry_def))
+
+# model1
+set.seed(1234)
+start <- proc.time()[3]
+model1.rf <- train(n ~ .,
+                  data = NR.train,
+                  method = "rf",
+                  importance = TRUE,
+                  ntree = 50, # How many trees to grow in total?
+                  tuneGrid = t_grid)
+end <- proc.time()[3]
+print(paste("This took ", round(end-start,digits = 1), " seconds", sep = ""))
+
+# results
+print(model1.rf)
+```
+Model 1 outcome has an Rsquared of 0.79 and RMSE of 108.5. A decent first model, however, the RMSE will be more interpreable if made proportional to the mean daily ride count (n). We will make this conversion for the prediction outcome from our test dataset.
+
+### Test model 1 predictive ablity on test dataset
+```{r echo=FALSE}
+predictions.1 <- predict(model1.rf, NR.test[,1:10])
+RMSE.1 <- sqrt(sum((predictions.1 - NR.test$n)^2)/length(predictions.1))
+print(RMSE.1)
+```
+The Root Mean Squared Error is ~100 bike rides per day, convert this to a percentage of the mean for (n) to better interpret model accuracy
+
+### Divide by mean of daily ride count(n) for interpretation as percentage of the mean
+```{r echo=FALSE}
+print(RMSE.1/mean(NR.test$n)) 
+```
+This is a poor outcome if error rate accounts for 80% of the test set mean. Re-run model and allow 'caret' package free roaming for determining how many columns to include per tree (mtry):
+
+### Run model 2 removing tuneGrid component
+```{r echo=FALSE}
+set.seed(1234)
+start <- proc.time()[3]
+model2.rf <- train(n ~ .,
+                  data = NR.train,
+                  method = "rf",
+                  importance = TRUE,
+                  ntree = 50) 
+end <- proc.time()[3]
+print(paste("This took ", round(end-start,digits = 1), " seconds", sep = ""))
+
+print(model2.rf)
+```
+Model 2 produced a much better outcome since caret was allowed to determine the mtry floor automatically. After a similar review of the model predictability, lets consider model 3 with double the ntree parameter.
+
+### Test model 2 predictive ablity on test dataset
+```{r echo=FALSE}
+predictions.2 <- predict(model2.rf, NR.test[,1:10])
+RMSE.2 <- sqrt(sum((predictions.2 - NR.test$n)^2)/length(predictions.2))
+print(RMSE.2)
+
+# difference of 1 & 2 RMSE
+(RMSE.2/RMSE.1)-1
+```
+Allowing 'caret' to find the optimal mtry value has reduced the RMSE by 52%, checking RMSE in proportion to mean for NR.test$n:
+
+### Divide by mean of daily ride count(n) for interpretation as percentage of the mean
+```{r echo=FALSE}
+print(RMSE.2/mean(NR.test$n)) 
+```
+The result for RMSE.2 is much smaller in proportion to the mean for NR.test$n, running one final model with 100 trees instead of 50:
+
+### Run model 3 doubling ntree parameter
+```{r echo=FALSE}
+set.seed(1234)
+start <- proc.time()[3]
+model3.rf <- train(n ~ .,
+                  data = NR.train,
+                  method = "rf",
+                  importance = TRUE,
+                  ntree = 100) 
+end <- proc.time()[3]
+print(paste("This took ", round(end-start,digits = 1), " seconds", sep = ""))
+
+print(model3.rf)
+``` 
+
+### Test model 3 predictive ablity on test dataset
+```{r echo=FALSE}
+predictions.3 <- predict(model3.rf, NR.test[,1:10])
+RMSE.3 <- sqrt(sum((predictions.3 - NR.test$n)^2)/length(predictions.3))
+print(RMSE.3)
+
+# difference of 1 & 2 RMSE
+(RMSE.3/RMSE.2)-1
+```
+Model 3 provided only a slight improvement to Rsquared at mtry = 11 and the proportional difference of RMSE.3 to RMSE.2 is actually just under 1%. Not much improvement for more processing time.
+
+### Divide by mean of daily ride count(n) for interpretation as percentage of the mean
+```{r echo=FALSE}
+print(RMSE.3/mean(NR.test$n)) 
+```
+A sligthly less desireable RMSE proportion to the mean for model 3 compeared to model 2.
+
+We will consider model 2 our final model and plot the error rate in relation to the number of trees:
+
+```{r echo=FALSE}
+plot(model3.rf$finalModel)
+```
+This plot confirms that not much improvement occurs when ntree = 100 vs. ntree = 50.
+
+### Plot variables in relation to RMSE contribution
+```{r echo=FALSE}
+VarImp.2 <- varImp(model2.rf)
+plot(VarImp.2)
+```
+Variable importance plotting might allude to a limitation of the random forest approach when conducted on the entire data set rather than subsets based on clustering. The train function is giving importance to the cluster groups that outweighs the input for the weather variables.
+
+### Conclusion
+
+The machine learning application for this business problem originally began with the intention of clustering the dataset based on the mean distance between bike stations and applying a linear regression to each cluster. The approach shifted to random forests due to observing heteroskedasticity from the relationship of the weather variables to the dependent daily ride count. The heteroskedasticity caused poor regression modeling. The random forest model with 50 trees and mtry = 11 provided a model with a much higher Rsquared (.90 in place of ~0.70). However, it might be ideal to apply eight separate models to data subsets based on the clustering to give higher consideration to the weather variables and their influence on daily ride counts within each cluster rather than as a whole. Modeling on this level is beyond the scope of this current application and can be considered in future analysis.
+
+Regardless, this analysis has provided several important insights:
+
+*Rider behavior shows statistically significant differences which ought to be considered for any planned re-evaluation of bike ride subscription types and pricing, especially in lieu of RFP's for dockless systems.
+*Temperature plays a large role in daily bike count volume. Nice Ride MN might consider promotional strategies around changes in temperature, humidity, precipitation, and wind speed. This model could be use to prepare a dashboard interface for predicting daily ridership based on various weather variables combinations and thresholds. From this data product Nice Ride MN promotional efforts could be planned, providing discounted riding during certain parts of the season.
+*More work would need to be done with this analysis to provide insight and/or support for daily operational activities such as bike station rebalancing. This is the biggest limitation of this analysis, running models on each cluster might improve the outcome.
+
+
+
