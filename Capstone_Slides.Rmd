@@ -1,0 +1,506 @@
+---
+title: "Predicting Nice Ride MN Bikeshare Volume: Springboard Foundations of Data Science Capstone Project"
+author: '[Tony Tushar Jr](mailto:tonytusharjr@gmail.com)'
+date: '`r format(Sys.time(), "%B %d, %Y")`'
+output: 
+  ioslides_presentation:
+    smaller: true
+    fig_width: 5
+    fig_height: 4
+---
+
+```{r, message=FALSE, warning=FALSE, include=FALSE, cache=TRUE}
+cachedata = TRUE
+cachemodels = TRUE
+#setwd("~/Nice Ride MN 2017/Nice-Ride-MN-2017")
+setwd("~/Nice Ride MN 2017/Nice-Ride-MN-2017")
+```
+
+## Questions to Consider
+
+<div class="columns-2">
+  
+ 
+ 
+  ![](RQmCNqpD_400x400.jpg)
+  
+  * How does temperature, precipitation, humidity, and wind speed affect daily bike use?
+  * What are the busiest docking stations and how is this represented from a geospatial perspective?
+  * How does bike use vary between weekdays and weekends?
+  * How does user behavior differ between members and casual riders?
+  
+</div>
+
+## Introduction 
+__Main Objective:__ 
+
+- This project analyzes the Nice Ride MN bike share program 2016-2017 seasons alongside historical daily weather data to predict daily ridership. 
+
+- Outcome of this analysis can apply to a redistribution strategy for bikes to various docking stations and the timing of maintenance, leading to lower costs, and higher revenue.
+
+__Project Components:__ 
+
+- The project analysis occurs in three stages: (1) data wrangling, (2) exploratory/statistical data analysis, and (3) predictive modeling.
+
+## Executive Summary
+__General Discoveries:__
+
+* Memberships are the majority of daily use with bikes utilized to and from work commutes
+* Members have a higher tolerance than casual riders for unfavorable weather conditions
+* Ride density is greatest in downtown Minneapolis and less in St. Paul
+* Ride volume is comparable between the two seasons, however outside factors (road construction) might contribute to seasonal variance
+* Daily average temperature is the largest weather influence on bike use, followed by humidity, precipitation, and wind speed
+
+## Background and Description of Bikeshare Data Sets
+__Nice Ride MN History:__
+
+- Nice Ride MN was formed in 2008 from a city of Minneapolis initiative - Twin Cities Bike Share Project. Since 2015, the system has included over 1700 bikes and 190 stations with over 450,000 annual rides. Source: [Nice Ride MN - About](https://www.niceridemn.org/about/)
+
+__Bike Share Datasets:__ are available online from [Nice Ride MN](https://www.niceridemn.org/data/)
+
+- Ride history data includes: start and end date/time, start and end stations, total duration of trip, and account type
+- Bike station data includes: terminal number, station description, longitude, latitude, and number of docks
+
+## Description of Weather Data Sets
+__Daily Average Weather Dataset:__ is available online from [NOAA Weather Data Library](https://www.ncdc.noaa.gov/cdo-web/datasets#LCD)
+
+- Daily weather data includes averages for: temperature (F), relative humidity, wind speed (Mph), and precipitation (inches)
+
+__Data Processing__
+
+- This step involved matching bike activity to station details and daily weather measurements to each day of bike ride observations
+
+```{r,warning=FALSE,echo=FALSE,message=FALSE, include=FALSE}
+library(tidyverse)
+library(readr)
+library(ggthemes)
+library(lubridate)
+library(weathermetrics)
+library(geosphere)
+library(ggmap)
+library(sp)
+library(rgdal)
+library(dismo)
+library(rgeos)
+library(caret)
+
+Rides1617 <- read_csv("Nice_Ride_1617.csv")
+theme_set(theme_tufte())
+
+# Multiple plot function
+#
+# ggplot objects can be passed in ..., or to plotlist (as a list of ggplot objects)
+# - cols:   Number of columns in layout
+# - layout: A matrix specifying the layout. If present, 'cols' is ignored.
+#
+# If the layout is something like matrix(c(1,2,3,3), nrow=2, byrow=TRUE),
+# then plot 1 will go in the upper left, 2 will go in the upper right, and
+# 3 will go all the way across the bottom.
+#
+multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
+  library(grid)
+
+  # Make a list from the ... arguments and plotlist
+  plots <- c(list(...), plotlist)
+
+  numPlots = length(plots)
+
+  # If layout is NULL, then use 'cols' to determine layout
+  if (is.null(layout)) {
+    # Make the panel
+    # ncol: Number of columns of plots
+    # nrow: Number of rows needed, calculated from # of cols
+    layout <- matrix(seq(1, cols * ceiling(numPlots/cols)),
+                    ncol = cols, nrow = ceiling(numPlots/cols))
+  }
+
+ if (numPlots==1) {
+    print(plots[[1]])
+
+  } else {
+    # Set up the page
+    grid.newpage()
+    pushViewport(viewport(layout = grid.layout(nrow(layout), ncol(layout))))
+
+    # Make each plot, in the correct location
+    for (i in 1:numPlots) {
+      # Get the i,j matrix positions of the regions that contain this subplot
+      matchidx <- as.data.frame(which(layout == i, arr.ind = TRUE))
+
+      print(plots[[i]], vp = viewport(layout.pos.row = matchidx$row,
+                                      layout.pos.col = matchidx$col))
+    }
+  }
+}
+
+head(Rides1617)
+```
+
+## __Monthly Trip Volume Variance__ {.smaller}
+
+<div class="centered">
+```{r echo=FALSE}
+#Create data subset
+Trips_Month <- Rides1617 %>% count(Start_Year, Start_Month) %>% mutate(Percent_Year = prop.table(n))
+
+#Setup plot properties for possible reuse
+gg_prop_Month <- ggplot(data = data.frame(), aes(x = Start_Month, y = Percent_Year, fill = factor(Start_Year))) + 
+  geom_bar(stat = 'identity', position = 'dodge', alpha = 2/3) + labs(x = "Start Month", y = "Percentage", title="Trip Distribution by Month, 2016-2017", fill="Year")
+
+#Plot data
+gg_prop_Month %+% Trips_Month 
+```
+</div>
+Trip distrubution shows greatest variance year-over-year during the summer months.
+
+## __Trip Distribution by Day of the Week__ {.smaller}
+
+<div class="centered">
+```{r echo=FALSE}
+#Reorder days of the week
+Rides1617$Start_DoWeek <- ordered(Rides1617$Start_DoWeek, levels=c("Sun", "Mon", "Tue", "Wed", "Thu", 
+"Fri", "Sat"))
+
+#Create data subset
+Trips_Week <- Rides1617 %>% count(Start_Year, Start_DoWeek, Account_Type) %>% mutate(Percent_Year = prop.table(n))
+
+#Setup plot properties for possible reuse
+gg_prop_Week <- ggplot(data = data.frame(), aes(x = Start_DoWeek, y = Percent_Year, fill = factor(Account_Type))) + 
+  geom_bar(stat = 'identity', position = 'dodge', alpha = 2/3) + facet_grid(Start_Year ~ .) + labs(x = "Day of the Week", y = "Percentage", title="Trip Distribution by Day and Account Type, 2016-2017", fill="Account Type")
+
+#Plot data
+gg_prop_Week %+% Trips_Week 
+```
+</div>
+Member riders are utilizing the bikshare for commuting purposes. Casual riders are likely to utilize the bikeshare for leisure.
+
+## __Yearly Trip Variance by Account Type__ {.smaller}
+<div class="centered">
+```{r echo=FALSE}
+#Create data subset
+Trips_Account <- Rides1617 %>% count(Start_Year, Start_Month, Start_Day, Weekend, Account_Type) 
+Trips_Account16 <- Trips_Account %>% mutate(Dates = as.Date(paste(Start_Year, Start_Month, Start_Day, sep='-'))) %>% filter(Start_Year==2016) 
+Trips_Account17 <- Trips_Account %>% mutate(Dates = as.Date(paste(Start_Year, Start_Month, Start_Day, sep='-'))) %>% filter(Start_Year==2017) 
+
+#Setup plot properties for possible reuse
+gg_prop_Account16 <- ggplot(data = data.frame(), aes(x = Dates, y = n, color=factor(Account_Type))) + 
+  geom_point(size=3, alpha = 2/3) + geom_jitter() + labs(x = "Date", y = "Total Rides", title="Trip Distribution by Month", subtitle="2016", color="Account Type")
+
+gg_prop_Account17 <- ggplot(data = data.frame(), aes(x = Dates, y = n, color=factor(Account_Type))) + 
+  geom_point(size=3, alpha = 2/3) + geom_jitter() + labs(x = "Date", y = "Total Rides", title="Trip Distribution by Month", subtitle="2017", color="Account Type")
+
+#Plot data
+multiplot(gg_prop_Account16 %+% Trips_Account16, gg_prop_Account17 %+% Trips_Account17)
+```
+</div>
+Member rides dominant casual year-over-year with peak volume in the summer months. Various casual ride outliers suggest increased use on holiday and event days.
+
+## __Temperature Influence On Ride Volume__ {.smaller}
+<div class="centered">
+```{r,warning=FALSE,message=FALSE,echo=FALSE}
+# Subset without outliers
+Rides1617_Mod <- Rides1617 %>% filter(Total_DurationMin<=24*60)
+
+# Data subset
+Temp <- Rides1617_Mod %>% dplyr::select(Start_Year:Start_Day, Account_Type, Avg_Temp) %>% group_by(Start_Year, Start_Month, Start_Day, Account_Type, Avg_Temp) %>% tally()  
+
+#Correlation test between daily average temperature and bike count
+Cor_Temp <- cor.test(x = Temp$Avg_Temp, y = Temp$n)
+
+plot_cor_temp <- ggplot(Temp, aes(Avg_Temp, n))
+plot_cor_temp + geom_point() + geom_smooth(method="lm") + labs(x = "Avg Temp (F)", y = "Bike Count", title = "Average Daily Temperature and Bike Count", subtitle = "2016-2017 Seasons")
+```
+</div>
+An increase in average daily temperature is related to an increase in daily bike use.
+
+## __Wind Speed Influence on Bike Count__ {.smaller}
+<div class="centered">
+```{r,warning=FALSE,message=FALSE,echo=FALSE}
+# Data subset
+Wind <- Rides1617_Mod %>% dplyr::select(Start_Year:Start_Day, Account_Type, Avg_Wind) %>% group_by(Start_Year, Start_Month, Start_Day, Account_Type, Avg_Wind) %>% tally()  
+
+#Correlation test between daily average wind speed and bike count
+Cor_Wind <- cor.test(x = Wind$Avg_Wind, y = Wind$n)
+
+plot_cor_wind <- ggplot(Wind, aes(Avg_Wind, n))
+plot_cor_wind + geom_point() + geom_smooth(method="lm") + labs(x = "Avg Wind (Mph)", y = "Bike Count", title = "Average Daily Wind Speed and Bike Count", subtitle="2016-2017 Seasons")
+```
+</div>
+As average daily wind speed increases, bike use declines.
+
+## __Relative Humidity Influence On Bike Count__ {.smaller}
+<div class="centered">
+```{r,warning=FALSE,message=FALSE,echo=FALSE}
+# Data subset
+Humidity <- Rides1617_Mod %>% dplyr::select(Start_Year:Start_Day, Account_Type, Rel_Humidity) %>% group_by(Start_Year, Start_Month, Start_Day, Account_Type, Rel_Humidity) %>% tally()  
+
+#Correlation test between daily precipitation and bike count
+Cor_Humidity <- cor.test(x = Humidity$Rel_Humidity, y = Humidity$n)
+
+plot_cor_humidity <- ggplot(Humidity, aes(Rel_Humidity, n))
+plot_cor_humidity + geom_point() + geom_smooth(method="lm") + labs(x = "Relative Humidity", y = "Bike Count", title = "Daily Relative Humidity and Bike Count", subtitle="2016-2017 Seasons")
+```
+</div>
+As average daily relative humidity increases, bike use declines.
+
+## EDA Summary
+
+In comparison to casual riders, member riders appear more willing to handle average weather variables in the following manner:
+
++ Lower temperatures
++ Higher wind speed
++ Higher precipitation
++ Higher relative humidty
+
+## __Geospatial Considerations Before Modeling __ {.smaller} 
+- Mapping the density of bike station use makes it clear that certain areas carry greater ride density. Including this grouping variable in the modeling might improve predictive ability.
+<div class="centered">
+```{r include=FALSE}
+rm(list=ls())
+
+NiceRide <- read_csv("NiceRide1617_Out.csv")
+head(NiceRide)
+```
+
+```{r echo=FALSE, results='hide', message=FALSE}
+#Load map
+Map_TwinCities <- get_map(c(lon = -93.25576, lat = 44.97394), zoom = 11, maptype = "roadmap", source = "google")
+
+#Set map data subset of Rides
+Geo_Rides <- NiceRide %>% group_by(Start_Longitude, Start_Latitude) %>% count(Start_Station) %>% arrange(desc(n))
+
+attach(Geo_Rides)
+
+ggmap::ggmap(Map_TwinCities) + geom_point(aes(x = Start_Longitude, y = Start_Latitude, size = n), data = Geo_Rides, alpha = .25, color = "blue")
+```
+</div>
+
+## __Finding the optimal station grouping for predictive modeling:__ {.smaller}
+__Using the average distance between all possible bike station pairings results in the following grouping:__
+<div class="centered">
+```{r include=FALSE}
+# convert data to a SpatialPointsDataFrame object
+x <- Geo_Rides$Start_Longitude
+y <- Geo_Rides$Start_Latitude
+
+xy <- SpatialPointsDataFrame(
+      matrix(c(x,y), ncol=2), data.frame(ID=seq(1:length(x))),
+      proj4string=CRS("+proj=longlat +ellps=WGS84 +datum=WGS84"))
+
+# use the distm function to generate a geodesic distance matrix in meters
+mdist <- geosphere::distm(xy)
+
+# cluster all points using a hierarchical clustering approach
+hc <- hclust(as.dist(mdist), method="complete")
+
+# Convert mdist matrix to vector for mean geodesic distance, required input for d below
+mdist.vec <- as.vector(mdist)
+summary(mdist.vec)
+
+# define the distance threshold
+d=(mean(mdist.vec))
+
+# define clusters based on a tree "height" cutoff "d" and add them to the SpDataFrame
+xy$clust <- cutree(hc, h=d)
+
+StationClusters <- as.data.frame(xy)
+```
+
+```{r include=FALSE}
+# expand the extent of plotting frame
+xy@bbox[] <- as.matrix(extend(extent(xy),0.001))
+
+# get the centroid coords for each cluster
+cent <- matrix(ncol=2, nrow=max(xy$clust))
+for (i in 1:max(xy$clust))
+    # gCentroid from the rgeos package
+    cent[i,] <- gCentroid(subset(xy, clust == i))@coords
+
+# compute circles around the centroid coords using a 4055.54688m radius
+# from the dismo package
+ci <- circles(cent, d=d, lonlat=T)
+
+# plot
+plot(ci@polygons, axes=T)
+plot(xy, col=rainbow(8)[factor(xy$clust)], add=T)
+```
+
+```{r echo=FALSE}
+ggmap::ggmap(Map_TwinCities) + geom_point(aes(x = coords.x1, y = coords.x2, colour = factor(clust)), data = StationClusters, alpha = .3, size = 4)
+```
+</div>
+
+## __Refined dataset for modeling:__
+```{r include=FALSE}
+# Drop ID variable in StationClusters dataframe
+StationClusters <- StationClusters %>% dplyr::select(-1)
+
+NiceRide.Clusters <- left_join(NiceRide,StationClusters, by = c("Start_Longitude" = "coords.x1", "Start_Latitude" = "coords.x2"))
+
+# Left join created duplicate observations, run distinct on dataframe
+NiceRide.Clusters <- distinct(NiceRide.Clusters)
+```
+
+```{r include=FALSE}
+NiceRide.Clusters <- NiceRide.Clusters %>% dplyr::select(31, 1:30)
+
+NiceRide.Clusters <- NiceRide.Clusters %>% group_by(clust) %>% arrange(clust)
+
+rm(list=setdiff(ls(),c("NiceRide.Clusters")))
+```
+
+```{r echo=FALSE}
+NiceRide.Counts <- NiceRide.Clusters %>% count(clust, Start_DoWeek, Start_Year, Start_Month, Start_Day, Account_Type, Avg_Temp, Avg_Wind, Precip, Rel_Humidity) 
+
+NiceRide.Counts[is.na(NiceRide.Counts)] <- 0
+
+# Arrange
+NiceRide.Counts <- NiceRide.Counts %>% arrange(Start_Year, Start_Month, Start_Day)
+head(NiceRide.Counts)
+```
+
+## __Random Forests Modeling__
+
+- Modeling approach creates numerous decision trees with varying outcomes based on picking from the data at random
+- Majority outcomes determine the structure of the model 
+- 80% of the dataset is for training the model
+- Model performance is tested on the remaining 20%, both sets are determined at random to reduce chance for biased outcomes
+- Three RF models are ran with the goal of producing the greatest Rsquared (predictive fit) and lowest Root Mean Squared Error (error rate)
+
+## __Model 1 Summary:__ {.smaller}
+```{r include=FALSE}
+NiceRide.Counts$Start_DoWeek <- as.factor(NiceRide.Counts$Start_DoWeek)
+NiceRide.Counts$Account_Type <- as.factor(NiceRide.Counts$Account_Type)
+NiceRide.Counts$clust <- as.factor(NiceRide.Counts$clust)
+str(NiceRide.Counts)
+
+rm(list=setdiff(ls(),c("NiceRide.Counts")))
+```
+
+```{r echo=FALSE}
+# set train/test data
+set.seed(1234)
+train <- sample(1:nrow(NiceRide.Counts), 5437)
+
+NR.train <- NiceRide.Counts[train,]
+NR.test <- NiceRide.Counts[-train,]
+
+# determine mtry floor
+mtry_def <- floor(sqrt(ncol(NR.train))*.75) # How many columns to select in each bootstrap sample?
+t_grid <- expand.grid(mtry= c(mtry_def))
+
+# model1
+set.seed(1234)
+model1.rf <- train(n ~ .,
+                  data = NR.train,
+                  method = "rf",
+                  importance = TRUE,
+                  ntree = 50, # How many trees to grow in total?
+                  tuneGrid = t_grid)
+# results
+print(model1.rf)
+```
+- Model 1 has a predictive fit of 79% over the training data and tree branches contain two predictors each 
+```{r include=FALSE}
+predictions.1 <- predict(model1.rf, NR.test[,1:10])
+RMSE.1 <- sqrt(sum((predictions.1 - NR.test$n)^2)/length(predictions.1))
+print(RMSE.1)
+```
+
+```{r echo=FALSE}
+print(RMSE.1/mean(NR.test$n)) 
+```
+- Model 1 is a poor performer with an error rate of 80% for the test dataset prediction
+
+## __Model 2 Summary:__ {.smaller}
+```{r echo=FALSE}
+set.seed(1234)
+model2.rf <- train(n ~ .,
+                  data = NR.train,
+                  method = "rf",
+                  importance = TRUE,
+                  ntree = 50) 
+
+print(model2.rf)
+```
+- Model 2 has a predictive fit of over 90% of the training data, a great improvement over Model 1
+
+```{r include=FALSE}
+predictions.2 <- predict(model2.rf, NR.test[,1:10])
+RMSE.2 <- sqrt(sum((predictions.2 - NR.test$n)^2)/length(predictions.2))
+print(RMSE.2)
+
+# difference of 1 & 2 RMSE
+(RMSE.2/RMSE.1)-1
+```
+
+```{r echo=FALSE}
+print(RMSE.2/mean(NR.test$n)) 
+```
+- The error rate for the prediction result of Model 2 is much smaller than Model 1
+
+## __Model 3 Summary:__ {.smaller}
+```{r echo=FALSE}
+set.seed(1234)
+
+model3.rf <- train(n ~ .,
+                  data = NR.train,
+                  method = "rf",
+                  importance = TRUE,
+                  ntree = 100) 
+print(model3.rf)
+``` 
+
+```{r include=FALSE}
+predictions.3 <- predict(model3.rf, NR.test[,1:10])
+RMSE.3 <- sqrt(sum((predictions.3 - NR.test$n)^2)/length(predictions.3))
+print(RMSE.3)
+
+# difference of 1 & 2 RMSE
+(RMSE.3/RMSE.2)-1
+```
+
+```{r echo=FALSE}
+print(RMSE.3/mean(NR.test$n)) 
+```
+- Model 3 provides a predictive fit improvement of less than 0.10% and takes much longer to process
+
+## __Error Rate in Relation to the Number of Trees:__ {.smaller}
+<div class="centered">
+```{r echo=FALSE}
+plot(model3.rf$finalModel)
+```
+</div>
+This plot confirms that little improvement occurs when the number of classification trees is 100 compared to 50
+
+## __Predictor Variable Ranking__ {.smaller}
+<div class="centered">
+```{r echo=FALSE}
+VarImp.2 <- varImp(model2.rf)
+plot(VarImp.2)
+```
+</div>
+- Account type is the highest ranking variable of importance, followed by dense station groups, and average daily temperature
+- Other weather predictors play less of a role
+
+## Conclusions
+
+- Random forests modeling handles large weather variable variations well
+- Linear regression modeling was the originally intended approach, but would not work well for dataset
+
+__Applications of modeling outcome:__
+
+- Account type is a significant predictor, user behavior differs between members and casual riders 
+- Different days of the week can influence bike use
+- Weather variables are more influential on casual riders
+- Consider all the above and project results when re-evaluation pricing and/or promotional efforts for increasing ridership
+
+## __Further research opportunities:__
+
+- Modeling each station grouping individually is likely to yield more reliable predictions to support bike rebalancing and maintenance
+
+__Files for Capstone Project are available online:__
+
+- [Rpubs](https://rpubs.com/tonytusharjr)
+- [github](https://github.com/tonytusharjr/Nice-Ride-MN-2017)
+
